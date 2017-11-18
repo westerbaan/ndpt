@@ -22,6 +22,10 @@ type Ray struct {
 	Direction UnitVector
 }
 
+func V(vs ...float64) Vector {
+	return Vector(vs)
+}
+
 func (v Vector) Add(w Vector) Vector {
 	ret := make([]float64, len(v), len(v))
 	for i := 0; i < len(v); i++ {
@@ -177,7 +181,7 @@ func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
 	}
 
 	a := projCentre.Sub(sphere.Centre).Length()
-	b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
+	// b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
 	ret.distance = projCentre.Sub(ray.Origin).Length()
 
 	if a >= sphere.Radius {
