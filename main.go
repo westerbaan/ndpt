@@ -407,13 +407,12 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 	}
 	sign := sum % 2
 
-	if sign == 1 {
-		colour = &Black
-		return
-	}
-
-	if true /* rand.Intn(2) == 0*/ {
-		colour = &White
+	if rand.Intn(5) != 0 {
+		if sign == 1 {
+			colour = &Black
+		} else {
+			colour = &White
+		}
 		return
 	}
 
