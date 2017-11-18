@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"runtime"
 )
@@ -148,6 +149,13 @@ func (r Ray) Follow(distance float64) Vector {
 	return r.Origin.Add(r.Direction.Scale(distance))
 }
 
+func (incoming UnitVector) Reflect(normal UnitVector) (outgoing UnitVector) {
+	nv := Vector(normal)
+	iv := Vector(incoming)
+	outgoing = iv.Sub(nv.Scale(2 * iv.Dot(nv))).Normalize()
+	return
+}
+
 type Hit interface {
 	Distance() float64
 
@@ -175,7 +183,7 @@ func (s *Scene) Intersect(ray Ray) Hit {
 			continue
 		}
 		dist := hit.Distance()
-		if dist < minDist {
+		if dist < minDist && dist > eps {
 			minDist = dist
 			minDistHit = hit
 		}
@@ -193,7 +201,12 @@ type Sampler struct {
 	// the result of the
 }
 
-func (s *Sampler) SampleOne(ray Ray) Colour {
+func (s *Sampler) SampleOne(ray Ray, dx, dy Vector) Colour {
+	dx = dx.Scale(rand.Float64())
+	dy = dy.Scale(rand.Float64())
+
+	ray.Direction = Vector(ray.Direction).Add(dx).Add(dy).Normalize()
+
 	body := s.Root
 	for i := 0; i < s.MaxBounces; i++ {
 		hit := body.Intersect(ray)
@@ -210,21 +223,21 @@ func (s *Sampler) SampleOne(ray Ray) Colour {
 	return Black
 }
 
-func (s *Sampler) SampleBatch(ray Ray, size int) (c Colour) {
+func (s *Sampler) SampleBatch(ray Ray, size int, dx, dy Vector) (c Colour) {
 	for i := 0; i < size; i++ {
-		c = c.Add(s.SampleOne(ray))
+		c = c.Add(s.SampleOne(ray, dx, dy))
 	}
 	c = c.Scale(1 / float64(size))
 	return
 }
 
-func (s *Sampler) Sample(ray Ray) Colour {
+func (s *Sampler) Sample(ray Ray, dx, dy Vector) Colour {
 	var old, new Colour
 
 	size := s.FirstBatch
 
-	old = s.SampleBatch(ray, size)
-	new = s.SampleBatch(ray, size)
+	old = s.SampleBatch(ray, size, dx, dy)
+	new = s.SampleBatch(ray, size, dx, dy)
 
 	for {
 		if old.Sub(new).SupNorm() < s.Target {
@@ -233,7 +246,7 @@ func (s *Sampler) Sample(ray Ray) Colour {
 
 		old = old.Add(new).Scale(.5)
 		size = 2 * size
-		new = s.SampleBatch(ray, size)
+		new = s.SampleBatch(ray, size, dx, dy)
 	}
 }
 
@@ -243,10 +256,10 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 	imag.Width = camera.Hres
 	imag.Pixels = make([][]Colour, camera.Vres)
 
-	type Job struct{ x, y int }
+	type Job struct{ x int }
 	type Result struct {
-		x, y int
-		col  Colour
+		x   int
+		col []Colour
 	}
 
 	inCh := make(chan Job, camera.Hres*camera.Vres)
@@ -261,29 +274,35 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 					break
 				}
 
-				down := camera.Down.Scale(float64(2*job.x-camera.Vres) / 2)
-				right := camera.Right.Scale(float64(2*job.y-camera.Hres) / 2)
-				point := camera.Centre.Add(down).Add(right)
-				ray := Ray{camera.Origin, point.Normalize()}
-				outCh <- Result{job.x, job.y, s.Sample(ray)}
+				cols := make([]Colour, camera.Hres)
+
+				for y := 0; y < camera.Hres; y++ {
+					down := camera.Down.Scale(float64(2*job.x-camera.Vres) / 2)
+					right := camera.Right.Scale(float64(2*y-camera.Hres) / 2)
+					point := camera.Centre.Add(down).Add(right)
+					ray := Ray{camera.Origin, point.Normalize()}
+					cols[y] = s.Sample(ray, camera.Right, camera.Down)
+				}
+
+				outCh <- Result{job.x, cols}
 			}
 		}()
 	}
 
 	for i := 0; i < camera.Vres; i++ {
 		imag.Pixels[i] = make([]Colour, camera.Hres)
-
-		for j := 0; j < camera.Hres; j++ {
-			inCh <- Job{i, j}
-		}
+		inCh <- Job{i}
 	}
 	close(inCh)
 
 	nPixels := 0
 	for {
 		res := <-outCh
-		imag.Pixels[res.x][res.y] = res.col
-		nPixels++
+		for y := 0; y < camera.Hres; y++ {
+			imag.Pixels[res.x][y] = res.col[y]
+		}
+		nPixels += camera.Hres
+		log.Printf("%d pixels", nPixels)
 		if nPixels == camera.Vres*camera.Hres {
 			break
 		}
@@ -390,8 +409,17 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 
 	if sign == 1 {
 		colour = &Black
-	} else {
+		return
+	}
+
+	if true /* rand.Intn(2) == 0*/ {
 		colour = &White
+		return
+	}
+
+	ray = &Ray{
+		Origin:    intercept,
+		Direction: h.ray.Direction.Reflect(h.board.Normal.Direction),
 	}
 
 	return
@@ -400,9 +428,9 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	N := 3
-	Hres := 1000
-	Vres := 1000
+	N := 7
+	Hres := 500
+	Vres := 500
 
 	origin := V(make([]float64, N)...)
 	up := E(N, 0)
@@ -429,9 +457,22 @@ func main() {
 	corigin := make([]float64, N)
 	corigin[0] = 1
 	corigin[1] = -2
+	corigin[2] = 0.3
+	corigin[3] = 0.5
+	corigin[4] = .5
+	corigin[5] = 0.5
+	corigin[6] = .5
 	camera.Origin = Vector(corigin)
 
-	camera.Centre = E(N, 1)
+	ccentre := make([]float64, N)
+	ccentre[0] = .1
+	ccentre[1] = 1
+	ccentre[2] = .25
+	ccentre[3] = .25
+	ccentre[4] = .125
+	ccentre[5] = .0675
+	ccentre[6] = 0.0385
+	camera.Centre = Vector(ccentre)
 	camera.Down = origin.Sub(up).Scale(1 / float64(Vres))
 	camera.Right = E(N, 2).Scale(1 / float64(Hres))
 	camera.Hres = Hres
@@ -439,9 +480,9 @@ func main() {
 
 	sampler := &Sampler{}
 	sampler.Root = scene
-	sampler.MaxBounces = 10
-	sampler.FirstBatch = 10
-	sampler.Target = .2
+	sampler.MaxBounces = 20
+	sampler.FirstBatch = 20
+	sampler.Target = .05
 
 	file, _ := os.Create("test.png")
 	png.Encode(file, sampler.Shoot(camera).ToNRGBA())
