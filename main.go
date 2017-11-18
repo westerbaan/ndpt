@@ -17,6 +17,22 @@ type Colour struct {
 var Black Colour = Colour{0, 0, 0}
 var White Colour = Colour{1, 1, 1}
 
+func (c Colour) Add(d Colour) Colour {
+	return Colour{c.R + d.R, c.G + d.G, c.B + d.B}
+}
+
+func (c Colour) Sub(d Colour) Colour {
+	return Colour{c.R - d.R, c.G - d.G, c.B - d.B}
+}
+
+func (c Colour) Scale(scalar float64) Colour {
+	return Colour{scalar * c.R, scalar * c.G, scalar * c.B}
+}
+
+func (c Colour) SupNorm() float64 {
+	return math.Max(math.Abs(c.R), math.Max(math.Abs(c.G), math.Abs(c.B)))
+}
+
 type Ray struct {
 	Origin    Vector
 	Direction UnitVector
@@ -131,9 +147,14 @@ func (s *Scene) Intersect(ray Ray) Hit {
 type Sampler struct {
 	Root       Body
 	MaxBounces int
+	FirstBatch int
+	Target     float64
+	// if the difference between the avarage colours of two consecutive
+	// batches is below Target, their avarage is accepted as
+	// the result of the
 }
 
-func (s *Sampler) Sample(ray Ray) Colour {
+func (s *Sampler) SampleOne(ray Ray) Colour {
 	body := s.Root
 	for i := 0; i < s.MaxBounces; i++ {
 		hit := body.Intersect(ray)
@@ -148,6 +169,33 @@ func (s *Sampler) Sample(ray Ray) Colour {
 	}
 	log.Print("MaxBounces hit :(")
 	return Black
+}
+
+func (s *Sampler) SampleBatch(ray Ray, size int) (c Colour) {
+	for i := 0; i < size; i++ {
+		c = c.Add(s.SampleOne(ray))
+	}
+	c = c.Scale(1 / float64(size))
+	return
+}
+
+func (s *Sampler) Sample(ray Ray) Colour {
+	var old, new Colour
+
+	size := s.FirstBatch
+
+	old = s.SampleBatch(ray, size)
+	new = s.SampleBatch(ray, size)
+
+	for {
+		if old.Sub(new).SupNorm() < s.Target {
+			return old.Add(new).Scale(.5)
+		}
+
+		old = old.Add(new).Scale(.5)
+		size = 2 * size
+		new = s.SampleBatch(ray, size)
+	}
 }
 
 type ReflectiveSphere struct {
