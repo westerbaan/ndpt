@@ -6,14 +6,69 @@ import (
 )
 
 type Vector []float64
+type UnitVector Vector
+
+const eps float64 = 1e-9
 
 type Color struct {
 	R, G, B float64
 }
 
+var Black Color = Color{0, 0, 0}
+
 type Ray struct {
 	Origin    Vector
-	Direction Vector
+	Direction UnitVector
+}
+
+func (v Vector) Add(w Vector) Vector {
+	ret := make([]float64, len(v), len(v))
+	for i := 0; i < len(v); i++ {
+		ret[i] = v[i] + w[i]
+	}
+	return ret
+}
+
+func (v Vector) Sub(w Vector) Vector {
+	ret := make([]float64, len(v), len(v))
+	for i := 0; i < len(v); i++ {
+		ret[i] = v[i] - w[i]
+	}
+	return ret
+}
+
+func (v Vector) Dot(w Vector) (res float64) {
+	for i := 0; i < len(v); i++ {
+		res += v[i] * w[i]
+	}
+	return
+}
+
+func (v Vector) Length() float64 {
+	return math.Sqrt(v.Dot(v))
+}
+
+func (v Vector) Scale(scalar float64) Vector {
+	ret := make([]float64, len(v), len(v))
+	for i := 0; i < len(v); i++ {
+		ret[i] = v[i] * scalar
+	}
+	return ret
+}
+
+func (v Vector) Normalize() UnitVector {
+	return UnitVector(v.Scale(1.0 / v.Length()))
+}
+
+// Returns the length of the vector projected onto the line associated with the
+// ray relative to the origin of the ray.
+func (r Ray) RelativeLength(v Vector) float64 {
+	return v.Sub(r.Origin).Dot(Vector(r.Direction))
+}
+
+// Returns the vector v projected onto the line associated with the ray
+func (r Ray) Project(v Vector) Vector {
+	return Vector(r.Direction).Scale(r.RelativeLength(v)).Add(r.Origin)
 }
 
 type Hit interface {
@@ -54,12 +109,12 @@ type Sampler struct {
 }
 
 func (s *Sampler) Sample(ray Ray) Color {
-	body := s.Body
+	body := s.Root
 	for i := 0; i < s.MaxBounces; i++ {
 		hit := body.Intersect(ray)
 		dist := hit.Distance()
-		if math.IsInf(dist) {
-			return // nothing hit: black
+		if math.IsInf(dist, 1) {
+			return Black
 		}
 		rayPtr, color := hit.Next()
 		if color != nil {
@@ -68,7 +123,20 @@ func (s *Sampler) Sample(ray Ray) Color {
 		ray = *rayPtr
 	}
 	log.Print("MaxBounces hit :(")
-	return
+	return Black
+}
+
+type ReflectiveSphere struct {
+	Origin Vector
+	Radius float64
+}
+
+type ReflectiveSphereHit struct {
+	Sphere *ReflectiveSphere
+}
+
+func (b *ReflectiveSphere) Intersect(ray Ray) Hit {
+
 }
 
 type Hypercheckerboard struct {
@@ -82,9 +150,9 @@ func (b *Hypercheckerboard) Intersect(ray Ray) Hit {
 type hcbHit struct {
 }
 
-func (hcbHit h) Distance() float64 {
+func (h hcbHit) Distance() float64 {
 }
 
-func (hcbHit h) Next() (*Ray, *Color) {
+func (h hcbHit) Next() (*Ray, *Color) {
 
 }
