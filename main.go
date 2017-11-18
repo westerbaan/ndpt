@@ -10,11 +10,11 @@ type UnitVector Vector
 
 const eps float64 = 1e-9
 
-type Color struct {
+type Colour struct {
 	R, G, B float64
 }
 
-var Black Color = Color{0, 0, 0}
+var Black Colour = Colour{0, 0, 0}
 
 type Ray struct {
 	Origin    Vector
@@ -87,9 +87,9 @@ func (r Ray) Project(v Vector) Vector {
 type Hit interface {
 	Distance() float64
 
-	// If hit, computes what happens next.  Returns a Color if the ray is
+	// If hit, computes what happens next.  Returns a Colour if the ray is
 	// emitted/absorped or a Ray if it bounced/reflected/refracted/....
-	Next() (*Ray, *Color)
+	Next() (*Ray, *Colour)
 }
 
 type Body interface {
@@ -124,7 +124,7 @@ type Sampler struct {
 	MaxBounces int
 }
 
-func (s *Sampler) Sample(ray Ray) Color {
+func (s *Sampler) Sample(ray Ray) Colour {
 	body := s.Root
 	for i := 0; i < s.MaxBounces; i++ {
 		hit := body.Intersect(ray)
@@ -155,7 +155,7 @@ func (h reflectiveSphereHit) Distance() float64 {
 	return h.distance
 }
 
-func (h reflectiveSphereHit) Next() (*Ray, *Color) {
+func (h reflectiveSphereHit) Next() (*Ray, *Colour) {
 	return nil, nil
 }
 
@@ -211,6 +211,6 @@ func (h *hcbHit) Distance() (distance float64) {
 	return
 }
 
-func (h *hcbHit) Next() (ray *Ray, color *Color) {
+func (h *hcbHit) Next() (ray *Ray, color *Colour) {
 	return
 }
