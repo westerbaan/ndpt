@@ -1,4 +1,4 @@
-package ndpt
+package main
 
 import (
 	"log"
@@ -45,6 +45,13 @@ type Ray struct {
 
 func V(vs ...float64) Vector {
 	return Vector(vs)
+}
+
+// m-th standard basis vector in N dimensions
+func E(N, m int) Vector {
+	res := make([]float64, N)
+	res[m] = 1
+	return Vector(res)
 }
 
 func (v Vector) Add(w Vector) Vector {
@@ -329,4 +336,52 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 	}
 
 	return
+}
+
+func main() {
+	N := 3
+	Hres := 100
+	Vres := 100
+
+	origin := V(make([]float64, N)...)
+	up := E(N, 0)
+
+	sphere := &ReflectiveSphere{}
+	sphere.Centre = up
+	sphere.Radius = 1
+
+	floor := &HyperCheckerboard{}
+	floor.Normal = Ray{origin, up.Normalize()}
+	floor.Axes = make([]Vector, N-1)
+	for i := 0; i < N-1; i++ {
+		floor.Axes[i] = E(N, i+1)
+	}
+
+	ceiling := &HyperCheckerboard{}
+	ceiling.Normal = Ray{up.Scale(2), up.Normalize()}
+	ceiling.Axes = floor.Axes
+
+	scene := &Scene{}
+	scene.Bodies = []Body{sphere, floor, ceiling}
+
+	camera := Camera{}
+	corigin := make([]float64, N)
+	corigin[0] = 1
+	corigin[1] = -2
+	camera.Origin = Vector(corigin)
+
+	camera.Centre = E(N, 2)
+	camera.Down = origin.Sub(up).Scale(1 / float64(Vres))
+	camera.Right = E(N, 2).Scale(1 / float64(Hres))
+	camera.Hres = Hres
+	camera.Vres = Vres
+
+	sampler := &Sampler{}
+	sampler.Root = scene
+	sampler.MaxBounces = 10
+	sampler.FirstBatch = 10
+	sampler.Target = .2
+
+	log.Printf("%v", sampler.Shoot(camera))
+
 }
