@@ -1,8 +1,11 @@
 package main
 
 import (
+	"image"
+	"image/png"
 	"log"
 	"math"
+	"os"
 )
 
 type Vector []float64
@@ -12,6 +15,15 @@ const eps float64 = 1e-9
 
 type Colour struct {
 	R, G, B float64
+}
+
+// to implement the image.Color interface:
+func (c Colour) RGBA() (r, g, b, a uint32) {
+	r = uint32(c.R * 0xffff)
+	b = uint32(c.B * 0xffff)
+	g = uint32(c.G * 0xffff)
+	a = 0xffff
+	return
 }
 
 var Black Colour = Colour{0, 0, 0}
@@ -36,6 +48,16 @@ func (c Colour) SupNorm() float64 {
 type Image struct {
 	Height, Width int
 	Pixels        [][]Colour
+}
+
+func (imag *Image) ToNRGBA() (nrgba *image.NRGBA) {
+	nrgba = image.NewNRGBA(image.Rect(0, 0, imag.Width, imag.Height))
+	for i := 0; i < imag.Height; i++ {
+		for j := 0; j < imag.Width; j++ {
+			nrgba.Set(j, i, imag.Pixels[i][j])
+		}
+	}
+	return
 }
 
 type Ray struct {
@@ -214,7 +236,8 @@ func (s *Sampler) Sample(ray Ray) Colour {
 	}
 }
 
-func (s *Sampler) Shoot(camera Camera) (imag Image) {
+func (s *Sampler) Shoot(camera Camera) (imag *Image) {
+	imag = &Image{}
 	imag.Height = camera.Vres
 	imag.Width = camera.Hres
 	imag.Pixels = make([][]Colour, camera.Vres)
@@ -340,8 +363,8 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 
 func main() {
 	N := 3
-	Hres := 100
-	Vres := 100
+	Hres := 1000
+	Vres := 1000
 
 	origin := V(make([]float64, N)...)
 	up := E(N, 0)
@@ -382,6 +405,7 @@ func main() {
 	sampler.FirstBatch = 10
 	sampler.Target = .2
 
-	log.Printf("%v", sampler.Shoot(camera))
-
+	file, _ := os.Create("test.png")
+	png.Encode(file, sampler.Shoot(camera).ToNRGBA())
+	file.Close()
 }
