@@ -33,6 +33,11 @@ func (c Colour) SupNorm() float64 {
 	return math.Max(math.Abs(c.R), math.Max(math.Abs(c.G), math.Abs(c.B)))
 }
 
+type Image struct {
+	Height, Width int
+	Pixels        [][]Colour
+}
+
 type Ray struct {
 	Origin    Vector
 	Direction UnitVector
@@ -200,6 +205,30 @@ func (s *Sampler) Sample(ray Ray) Colour {
 		size = 2 * size
 		new = s.SampleBatch(ray, size)
 	}
+}
+
+func (s *Sampler) Shoot(camera Camera) (imag Image) {
+	imag.Height = camera.Vres
+	imag.Width = camera.Hres
+	imag.Pixels = make([][]Colour, camera.Vres)
+	for i := 0; i < camera.Vres; i++ {
+		imag.Pixels[i] = make([]Colour, camera.Hres)
+
+		for j := 0; j < camera.Hres; j++ {
+			down := camera.Down.Scale(float64(i-camera.Vres) / 2)
+			right := camera.Right.Scale(float64(j-camera.Hres) / 2)
+			point := camera.Centre.Add(down).Add(right)
+			ray := Ray{camera.Origin, point.Normalize()}
+
+			imag.Pixels[i][j] = s.Sample(ray)
+		}
+	}
+	return imag
+}
+
+type Camera struct {
+	Origin, Centre, Down, Right Vector
+	Hres, Vres                  int
 }
 
 type ReflectiveSphere struct {
