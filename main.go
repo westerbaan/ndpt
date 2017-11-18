@@ -10,12 +10,12 @@ type UnitVector Vector
 
 const eps float64 = 1e-9
 
-type Color struct {
+type Colour struct {
 	R, G, B float64
 }
 
-var Black Color = Color{0, 0, 0}
-var White Color = Color{1, 1, 1}
+var Black Colour = Colour{0, 0, 0}
+var White Colour = Colour{1, 1, 1}
 
 type Ray struct {
 	Origin    Vector
@@ -61,6 +61,11 @@ func (v Vector) Normalize() UnitVector {
 	return UnitVector(v.Scale(1.0 / v.Length()))
 }
 
+// Returns whether the vector is almost zero, see eps.
+func (v Vector) IsZero() bool {
+	return v.Length() < eps
+}
+
 func (v UnitVector) Dot(w Vector) float64 {
 	return Vector(v).Dot(w)
 }
@@ -75,6 +80,10 @@ func (r Ray) RelativeLength(v Vector) float64 {
 	return v.Sub(r.Origin).Dot(Vector(r.Direction))
 }
 
+func (r Ray) InView(v Vector) bool {
+	return r.RelativeLength(v) >= 0
+}
+
 // Returns the vector v projected onto the line associated with the ray
 func (r Ray) Project(v Vector) Vector {
 	return Vector(r.Direction).Scale(r.RelativeLength(v)).Add(r.Origin)
@@ -85,11 +94,11 @@ func (r Ray) Follow(distance float64) Vector {
 }
 
 type Hit interface {
-	Distance() float64 // distance at which it hit; infty if it didn't
+	Distance() float64
 
-	// If hit, computes what happens next.  Returns a Color if the ray is
+	// If hit, computes what happens next.  Returns a Colour if the ray is
 	// emitted/absorped or a Ray if it bounced/reflected/refracted/....
-	Next() (*Ray, *Color)
+	Next() (*Ray, *Colour)
 }
 
 type Body interface {
@@ -107,6 +116,9 @@ func (s *Scene) Intersect(ray Ray) Hit {
 	minDist := math.Inf(1)
 	for _, body := range s.Bodies {
 		hit := body.Intersect(ray)
+		if hit == nil {
+			continue
+		}
 		dist := hit.Distance()
 		if dist < minDist {
 			minDist = dist
@@ -121,17 +133,16 @@ type Sampler struct {
 	MaxBounces int
 }
 
-func (s *Sampler) Sample(ray Ray) Color {
+func (s *Sampler) Sample(ray Ray) Colour {
 	body := s.Root
 	for i := 0; i < s.MaxBounces; i++ {
 		hit := body.Intersect(ray)
-		dist := hit.Distance()
-		if math.IsInf(dist, 1) {
+		if hit == nil {
 			return Black
 		}
-		rayPtr, color := hit.Next()
-		if color != nil {
-			return *color
+		rayPtr, colour := hit.Next()
+		if colour != nil {
+			return *colour
 		}
 		ray = *rayPtr
 	}
@@ -140,16 +151,40 @@ func (s *Sampler) Sample(ray Ray) Color {
 }
 
 type ReflectiveSphere struct {
-	Origin Vector
+	Centre Vector
 	Radius float64
 }
 
-type ReflectiveSphereHit struct {
-	Sphere *ReflectiveSphere
+type reflectiveSphereHit struct {
+	Sphere   *ReflectiveSphere
+	distance float64
 }
 
-func (b *ReflectiveSphere) Intersect(ray Ray) Hit {
+func (h reflectiveSphereHit) Distance() float64 {
+	return h.distance
+}
 
+func (h reflectiveSphereHit) Next() (*Ray, *Colour) {
+	return nil, nil
+}
+
+func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
+	var ret reflectiveSphereHit
+	projCentre := ray.Project(sphere.Centre)
+
+	if !ray.InView(projCentre) {
+		return nil
+	}
+
+	a := projCentre.Sub(sphere.Centre).Length()
+	b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
+	ret.distance = projCentre.Sub(ray.Origin).Length()
+
+	if a >= sphere.Radius {
+		return nil
+	}
+
+	return &ret
 }
 
 type HyperCheckerboard struct {
@@ -186,7 +221,7 @@ func (h *hcbHit) Distance() float64 {
 	return h.distance
 }
 
-func (h *hcbHit) Next() (ray *Ray, color *Color) {
+func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 	intercept := h.ray.Follow(h.distance)
 	t := make([]float64, len(h.board.Axes))
 
