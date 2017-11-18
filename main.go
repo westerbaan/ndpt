@@ -70,7 +70,7 @@ func (v UnitVector) Dot(w Vector) float64 {
 	return Vector(v).Dot(w)
 }
 
-func (v UnitVector) Scale(scalar float64) {
+func (v UnitVector) Scale(scalar float64) Vector {
 	return Vector(v).Scale(scalar)
 }
 
@@ -201,7 +201,7 @@ func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
 		return nil
 	}
 
-	distance = -offset / direction
+	distance := -offset / direction
 
 	if distance < 0 {
 		// ray moved away from the hyperplane - not hit
@@ -209,6 +209,10 @@ func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
 	}
 
 	return &hcbHit{ray, b, distance}
+}
+
+func (b *HyperCheckerboard) Origin() Vector {
+	return b.Normal.Origin
 }
 
 type hcbHit struct {
@@ -226,9 +230,9 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 	t := make([]float64, len(h.board.Axes))
 
 	for i := 0; i < len(t); i++ {
-		axisray := Ray{board.Origin, board.Axes[i].Normalize()}
+		axisray := Ray{h.board.Origin(), h.board.Axes[i].Normalize()}
 		t[i] = axisray.RelativeLength(intercept)
-		t[i] = t[i] / board.Axes[i].Length()
+		t[i] = t[i] / h.board.Axes[i].Length()
 	}
 
 	sum := 0
@@ -242,4 +246,6 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 	} else {
 		colour = &White
 	}
+
+	return
 }
