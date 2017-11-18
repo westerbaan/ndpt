@@ -60,6 +60,10 @@ func (v Vector) Normalize() UnitVector {
 	return UnitVector(v.Scale(1.0 / v.Length()))
 }
 
+func (v UnitVector) Dot(w Vector) float64 {
+	return Vector(v).Dot(w)
+}
+
 // Returns the length of the vector projected onto the line associated with the
 // ray relative to the origin of the ray.
 func (r Ray) RelativeLength(v Vector) float64 {
@@ -139,20 +143,39 @@ func (b *ReflectiveSphere) Intersect(ray Ray) Hit {
 
 }
 
-type Hypercheckerboard struct {
-	Axes []Vector
+type HyperCheckerboard struct {
+	Normal Ray
+	Axes   []Vector
 }
 
-func (b *Hypercheckerboard) Intersect(ray Ray) Hit {
-
+func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
+	return &hcbHit{ray, b}
 }
 
 type hcbHit struct {
+	ray   Ray
+	board *HyperCheckerboard
 }
 
-func (h hcbHit) Distance() float64 {
+func (h *hcbHit) Distance() (distance float64) {
+	offset := h.board.Normal.RelativeLength(h.ray.Origin)
+	direction := h.board.Normal.Direction.Dot(Vector(h.ray.Direction))
+
+	if math.Abs(direction) <= eps {
+		// ray is parallel to hyperplane
+		return math.Inf(1)
+	}
+
+	distance = -offset / direction
+
+	if distance < 0 {
+		// ray moved away from the hyperplane
+		return math.Inf(1)
+	}
+
+	return
 }
 
-func (h hcbHit) Next() (*Ray, *Color) {
-
+func (h *hcbHit) Next() (ray *Ray, color *Color) {
+	return
 }
