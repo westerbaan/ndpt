@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"runtime"
 )
 
 type Vector []float64
@@ -241,18 +242,53 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 	imag.Height = camera.Vres
 	imag.Width = camera.Hres
 	imag.Pixels = make([][]Colour, camera.Vres)
+
+	type Job struct{ x, y int }
+	type Result struct {
+		x, y int
+		col  Colour
+	}
+
+	inCh := make(chan Job, camera.Hres*camera.Vres)
+	outCh := make(chan Result, 10)
+
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go func() {
+			for {
+				job, more := <-inCh
+
+				if !more {
+					break
+				}
+
+				down := camera.Down.Scale(float64(2*job.x-camera.Vres) / 2)
+				right := camera.Right.Scale(float64(2*job.y-camera.Hres) / 2)
+				point := camera.Centre.Add(down).Add(right)
+				ray := Ray{camera.Origin, point.Normalize()}
+				outCh <- Result{job.x, job.y, s.Sample(ray)}
+			}
+		}()
+	}
+
 	for i := 0; i < camera.Vres; i++ {
 		imag.Pixels[i] = make([]Colour, camera.Hres)
 
 		for j := 0; j < camera.Hres; j++ {
-			down := camera.Down.Scale(float64(2*i-camera.Vres) / 2)
-			right := camera.Right.Scale(float64(2*j-camera.Hres) / 2)
-			point := camera.Centre.Add(down).Add(right)
-			ray := Ray{camera.Origin, point.Normalize()}
-
-			imag.Pixels[i][j] = s.Sample(ray)
+			inCh <- Job{i, j}
 		}
 	}
+	close(inCh)
+
+	nPixels := 0
+	for {
+		res := <-outCh
+		imag.Pixels[res.x][res.y] = res.col
+		nPixels++
+		if nPixels == camera.Vres*camera.Hres {
+			break
+		}
+	}
+
 	return imag
 }
 
@@ -362,6 +398,8 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	N := 3
 	Hres := 1000
 	Vres := 1000
