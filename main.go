@@ -245,8 +245,8 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 		imag.Pixels[i] = make([]Colour, camera.Hres)
 
 		for j := 0; j < camera.Hres; j++ {
-			down := camera.Down.Scale(float64(i-camera.Vres) / 2)
-			right := camera.Right.Scale(float64(j-camera.Hres) / 2)
+			down := camera.Down.Scale(float64(2*i-camera.Vres) / 2)
+			right := camera.Right.Scale(float64(2*j-camera.Hres) / 2)
 			point := camera.Centre.Add(down).Add(right)
 			ray := Ray{camera.Origin, point.Normalize()}
 
@@ -348,7 +348,7 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 
 	sum := 0
 	for i := 0; i < len(t); i++ {
-		sum += int(t[i])
+		sum += int(math.Floor(t[i]))
 	}
 	sign := sum % 2
 
@@ -385,7 +385,7 @@ func main() {
 	ceiling.Axes = floor.Axes
 
 	scene := &Scene{}
-	scene.Bodies = []Body{sphere, floor, ceiling}
+	scene.Bodies = []Body{floor, ceiling}
 
 	camera := Camera{}
 	corigin := make([]float64, N)
@@ -393,7 +393,7 @@ func main() {
 	corigin[1] = -2
 	camera.Origin = Vector(corigin)
 
-	camera.Centre = E(N, 2)
+	camera.Centre = E(N, 1)
 	camera.Down = origin.Sub(up).Scale(1 / float64(Vres))
 	camera.Right = E(N, 2).Scale(1 / float64(Hres))
 	camera.Hres = Hres
