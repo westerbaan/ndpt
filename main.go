@@ -384,7 +384,7 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 
 	sum := 0
 	for i := 0; i < len(t); i++ {
-		sum += int(math.Floor(t[i]))
+		sum += int(math.Abs(math.Floor(t[i])))
 	}
 	sign := sum % 2
 
