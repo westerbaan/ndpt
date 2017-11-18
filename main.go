@@ -60,10 +60,19 @@ func (v Vector) Normalize() UnitVector {
 	return UnitVector(v.Scale(1.0 / v.Length()))
 }
 
+// Returns whether the vector is almost zero, see eps.
+func (v Vector) IsZero() bool {
+	return v.Length() < eps
+}
+
 // Returns the length of the vector projected onto the line associated with the
 // ray relative to the origin of the ray.
 func (r Ray) RelativeLength(v Vector) float64 {
 	return v.Sub(r.Origin).Dot(Vector(r.Direction))
+}
+
+func (r Ray) InView(v Vector) bool {
+	return r.RelativeLength(v) >= 0
 }
 
 // Returns the vector v projected onto the line associated with the ray
@@ -72,7 +81,7 @@ func (r Ray) Project(v Vector) Vector {
 }
 
 type Hit interface {
-	Distance() float64 // distance at which it hit; infty if it didn't
+	Distance() float64
 
 	// If hit, computes what happens next.  Returns a Color if the ray is
 	// emitted/absorped or a Ray if it bounced/reflected/refracted/....
@@ -94,6 +103,9 @@ func (s *Scene) Intersect(ray Ray) Hit {
 	minDist := math.Inf(1)
 	for _, body := range s.Bodies {
 		hit := body.Intersect(ray)
+		if hit == nil {
+			continue
+		}
 		dist := hit.Distance()
 		if dist < minDist {
 			minDist = dist
@@ -112,8 +124,7 @@ func (s *Sampler) Sample(ray Ray) Color {
 	body := s.Root
 	for i := 0; i < s.MaxBounces; i++ {
 		hit := body.Intersect(ray)
-		dist := hit.Distance()
-		if math.IsInf(dist, 1) {
+		if hit == nil {
 			return Black
 		}
 		rayPtr, color := hit.Next()
@@ -127,16 +138,40 @@ func (s *Sampler) Sample(ray Ray) Color {
 }
 
 type ReflectiveSphere struct {
-	Origin Vector
+	Centre Vector
 	Radius float64
 }
 
-type ReflectiveSphereHit struct {
-	Sphere *ReflectiveSphere
+type reflectiveSphereHit struct {
+	Sphere   *ReflectiveSphere
+	distance float64
 }
 
-func (b *ReflectiveSphere) Intersect(ray Ray) Hit {
+func (h reflectiveSphereHit) Distance() float64 {
+	return h.distance
+}
 
+func (h reflectiveSphereHit) Next() (*Ray, *Color) {
+	return nil, nil
+}
+
+func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
+	var ret reflectiveSphereHit
+	projCentre := ray.Project(sphere.Centre)
+
+	if !ray.InView(projCentre) {
+		return nil
+	}
+
+	a := projCentre.Sub(sphere.Centre).Length()
+	b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
+	ret.distance = projCentre.Sub(ray.Origin).Length()
+
+	if a >= sphere.Radius {
+		return nil
+	}
+
+	return &ret
 }
 
 type Hypercheckerboard struct {
