@@ -15,6 +15,7 @@ type Color struct {
 }
 
 var Black Color = Color{0, 0, 0}
+var White Color = Color{1, 1, 1}
 
 type Ray struct {
 	Origin    Vector
@@ -64,6 +65,10 @@ func (v UnitVector) Dot(w Vector) float64 {
 	return Vector(v).Dot(w)
 }
 
+func (v UnitVector) Scale(scalar float64) {
+	return Vector(v).Scale(scalar)
+}
+
 // Returns the length of the vector projected onto the line associated with the
 // ray relative to the origin of the ray.
 func (r Ray) RelativeLength(v Vector) float64 {
@@ -73,6 +78,10 @@ func (r Ray) RelativeLength(v Vector) float64 {
 // Returns the vector v projected onto the line associated with the ray
 func (r Ray) Project(v Vector) Vector {
 	return Vector(r.Direction).Scale(r.RelativeLength(v)).Add(r.Origin)
+}
+
+func (r Ray) Follow(distance float64) Vector {
+	return r.Origin.Add(r.Direction.Scale(distance))
 }
 
 type Hit interface {
@@ -149,33 +158,53 @@ type HyperCheckerboard struct {
 }
 
 func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
-	return &hcbHit{ray, b}
-}
-
-type hcbHit struct {
-	ray   Ray
-	board *HyperCheckerboard
-}
-
-func (h *hcbHit) Distance() (distance float64) {
-	offset := h.board.Normal.RelativeLength(h.ray.Origin)
-	direction := h.board.Normal.Direction.Dot(Vector(h.ray.Direction))
+	offset := b.Normal.RelativeLength(ray.Origin)
+	direction := b.Normal.Direction.Dot(Vector(ray.Direction))
 
 	if math.Abs(direction) <= eps {
-		// ray is parallel to hyperplane
-		return math.Inf(1)
+		// ray is parallel to hyperplane - not hit
+		return nil
 	}
 
 	distance = -offset / direction
 
 	if distance < 0 {
-		// ray moved away from the hyperplane
-		return math.Inf(1)
+		// ray moved away from the hyperplane - not hit
+		return nil
 	}
 
-	return
+	return &hcbHit{ray, b, distance}
+}
+
+type hcbHit struct {
+	ray      Ray
+	board    *HyperCheckerboard
+	distance float64
+}
+
+func (h *hcbHit) Distance() float64 {
+	return h.distance
 }
 
 func (h *hcbHit) Next() (ray *Ray, color *Color) {
-	return
+	intercept := h.ray.Follow(h.distance)
+	t := make([]float64, len(h.board.Axes))
+
+	for i := 0; i < len(t); i++ {
+		axisray := Ray{board.Origin, board.Axes[i].Normalize()}
+		t[i] = axisray.RelativeLength(intercept)
+		t[i] = t[i] / board.Axes[i].Length()
+	}
+
+	sum := 0
+	for i := 0; i < len(t); i++ {
+		sum += int(t[i])
+	}
+	sign := sum % 2
+
+	if sign == 1 {
+		colour = &Black
+	} else {
+		colour = &White
+	}
 }
