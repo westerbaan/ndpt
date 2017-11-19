@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"image"
 	"image/png"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
+	"runtime/pprof"
 )
 
 type Vector []float64
@@ -439,7 +441,20 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 }
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile")
+	var memprofile = flag.String("memprofile", "", "write mem profile")
+	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	N := 5
 	Hres := 500
@@ -496,4 +511,16 @@ func main() {
 	file, _ := os.Create("test.png")
 	png.Encode(file, sampler.Shoot(camera).ToNRGBA())
 	file.Close()
+
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+		f.Close()
+	}
 }
