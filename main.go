@@ -454,12 +454,10 @@ func main() {
 	scentre[0] = 1
 	scentre[1] = .2
 	scentre[2] = .2
+	scentre[3] = .2
+	scentre[4] = .2
 	sphere.Centre = Vector(scentre)
 	sphere.Radius = .9
-
-	unisphere := &ReflectiveSphere{}
-	unisphere.Centre = sphere.Centre.Add(E(N, 2))
-	unisphere.Radius = 1
 
 	floor := &HyperCheckerboard{}
 	floor.Normal = Ray{origin, up.Normalize()}
@@ -473,16 +471,16 @@ func main() {
 	ceiling.Axes = floor.Axes
 
 	scene := &Scene{}
-	scene.Bodies = []Body{floor, ceiling, sphere, unisphere}
+	scene.Bodies = []Body{floor, ceiling, sphere}
 
 	camera := Camera{}
-	camera.Origin = sphere.Centre.Add(E(N, 1).Scale(-6))
+	camera.Origin = sphere.Centre.Add(E(N, 1).Scale(-3))
 
 	ccentre := make([]float64, N)
 	ccentre[0] = 0
 	ccentre[1] = 1
-	ccentre[3] = .00
-	ccentre[4] = .00
+	ccentre[3] = .06
+	ccentre[4] = .07
 	camera.Centre = Vector(ccentre)
 	camera.Down = origin.Sub(up).Scale(1 / float64(Vres))
 	camera.Right = E(N, 2).Scale(1 / float64(Hres))
@@ -492,8 +490,8 @@ func main() {
 	sampler := &Sampler{}
 	sampler.Root = scene
 	sampler.MaxBounces = 20
-	sampler.FirstBatch = 20
-	sampler.Target = .1
+	sampler.FirstBatch = 30
+	sampler.Target = .05
 
 	file, _ := os.Create("test.png")
 	png.Encode(file, sampler.Shoot(camera).ToNRGBA())
