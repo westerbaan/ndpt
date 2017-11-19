@@ -322,6 +322,7 @@ type ReflectiveSphere struct {
 }
 
 type reflectiveSphereHit struct {
+	ray      Ray
 	Sphere   *ReflectiveSphere
 	distance float64
 }
@@ -330,12 +331,21 @@ func (h reflectiveSphereHit) Distance() float64 {
 	return h.distance
 }
 
-func (h reflectiveSphereHit) Next() (*Ray, *Colour) {
-	return nil, nil
+func (h reflectiveSphereHit) Next() (ray *Ray, colour *Colour) {
+	intercept := h.ray.Follow(h.distance)
+	normal := intercept.Sub(h.Sphere.Centre).Normalize()
+	direction := h.ray.Direction.Reflect(normal)
+
+	ray = &Ray{intercept, direction}
+
+	//colour = &White
+	return
 }
 
 func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
 	var ret reflectiveSphereHit
+	ret.ray = ray
+	ret.Sphere = sphere
 	projCentre := ray.Project(sphere.Centre)
 
 	if !ray.InView(projCentre) {
@@ -343,8 +353,8 @@ func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
 	}
 
 	a := projCentre.Sub(sphere.Centre).Length()
-	// b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
-	ret.distance = projCentre.Sub(ray.Origin).Length()
+	b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
+	ret.distance = projCentre.Sub(ray.Origin).Length() - b
 
 	if a >= sphere.Radius {
 		return nil
@@ -371,6 +381,10 @@ func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
 
 	if distance < 0 {
 		// ray moved away from the hyperplane - not hit
+		return nil
+	}
+
+	if ray.Follow(distance).Length() > 15 {
 		return nil
 	}
 
@@ -427,7 +441,7 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	N := 7
+	N := 5
 	Hres := 500
 	Vres := 500
 
@@ -435,8 +449,17 @@ func main() {
 	up := E(N, 0)
 
 	sphere := &ReflectiveSphere{}
-	sphere.Centre = up
-	sphere.Radius = 1
+
+	scentre := make([]float64, N)
+	scentre[0] = 1
+	scentre[1] = .2
+	scentre[2] = .2
+	sphere.Centre = Vector(scentre)
+	sphere.Radius = .9
+
+	unisphere := &ReflectiveSphere{}
+	unisphere.Centre = sphere.Centre.Add(E(N, 2))
+	unisphere.Radius = 1
 
 	floor := &HyperCheckerboard{}
 	floor.Normal = Ray{origin, up.Normalize()}
@@ -450,27 +473,16 @@ func main() {
 	ceiling.Axes = floor.Axes
 
 	scene := &Scene{}
-	scene.Bodies = []Body{floor, ceiling}
+	scene.Bodies = []Body{floor, ceiling, sphere, unisphere}
 
 	camera := Camera{}
-	corigin := make([]float64, N)
-	corigin[0] = 1
-	corigin[1] = -2
-	corigin[2] = 0.3
-	corigin[3] = 0.5
-	corigin[4] = .5
-	corigin[5] = 0.5
-	corigin[6] = .5
-	camera.Origin = Vector(corigin)
+	camera.Origin = sphere.Centre.Add(E(N, 1).Scale(-6))
 
 	ccentre := make([]float64, N)
-	ccentre[0] = .1
+	ccentre[0] = 0
 	ccentre[1] = 1
-	ccentre[2] = .25
-	ccentre[3] = .25
-	ccentre[4] = .125
-	ccentre[5] = .0675
-	ccentre[6] = 0.0385
+	ccentre[3] = .00
+	ccentre[4] = .00
 	camera.Centre = Vector(ccentre)
 	camera.Down = origin.Sub(up).Scale(1 / float64(Vres))
 	camera.Right = E(N, 2).Scale(1 / float64(Hres))
@@ -481,7 +493,7 @@ func main() {
 	sampler.Root = scene
 	sampler.MaxBounces = 20
 	sampler.FirstBatch = 20
-	sampler.Target = .05
+	sampler.Target = .1
 
 	file, _ := os.Create("test.png")
 	png.Encode(file, sampler.Shoot(camera).ToNRGBA())
