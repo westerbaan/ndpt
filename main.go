@@ -367,6 +367,22 @@ func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
 type HyperCheckerboard struct {
 	Normal Ray
 	Axes   []Vector
+
+	AxisRays    []Ray
+	AxisLengths []float64
+}
+
+func NewHyperCheckboard(normal Ray, axes []Vector) *HyperCheckerboard {
+	ret := &HyperCheckerboard{}
+	ret.Normal = normal
+	ret.Axes = axes
+	ret.AxisRays = make([]Ray, len(axes))
+	ret.AxisLengths = make([]float64, len(axes))
+	for i := 0; i < len(axes); i++ {
+		ret.AxisRays[i] = Ray{normal.Origin, axes[i].Normalize()}
+		ret.AxisLengths[i] = axes[i].Length()
+	}
+	return ret
 }
 
 func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
@@ -385,12 +401,12 @@ func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
 		return nil
 	}
 
-	intersect := ray.Follow(distance)
-	if intersect.Length() > 15 {
+	intercept := ray.Follow(distance)
+	if intercept.Length() > 15 {
 		return nil
 	}
 
-	return &hcbHit{ray, b, distance}
+	return &hcbHit{ray, b, distance, intercept}
 }
 
 func (b *HyperCheckerboard) Origin() Vector {
@@ -398,9 +414,10 @@ func (b *HyperCheckerboard) Origin() Vector {
 }
 
 type hcbHit struct {
-	ray      Ray
-	board    *HyperCheckerboard
-	distance float64
+	ray       Ray
+	board     *HyperCheckerboard
+	distance  float64
+	intercept Vector
 }
 
 func (h *hcbHit) Distance() float64 {
@@ -408,18 +425,10 @@ func (h *hcbHit) Distance() float64 {
 }
 
 func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
-	intercept := h.ray.Follow(h.distance)
-	t := make([]float64, len(h.board.Axes))
-
-	for i := 0; i < len(t); i++ {
-		axisray := Ray{h.board.Origin(), h.board.Axes[i].Normalize()}
-		t[i] = axisray.RelativeLength(&intercept)
-		t[i] = t[i] / h.board.Axes[i].Length()
-	}
-
 	sum := 0
-	for i := 0; i < len(t); i++ {
-		sum += int(math.Abs(math.Floor(t[i])))
+	for i := 0; i < len(h.board.Axes); i++ {
+		t := h.board.AxisRays[i].RelativeLength(&h.intercept) / h.board.AxisLengths[i]
+		sum += int(math.Abs(math.Floor(t)))
 	}
 	sign := sum % 2
 
@@ -433,7 +442,7 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 	}
 
 	ray = &Ray{
-		Origin:    intercept,
+		Origin:    h.intercept,
 		Direction: h.ray.Direction.Reflect(h.board.Normal.Direction),
 	}
 
@@ -467,16 +476,13 @@ func main() {
 	sphere.Centre = [...]float64{1, .2, .2, .2, .2}
 	sphere.Radius = .9
 
-	floor := &HyperCheckerboard{}
-	floor.Normal = Ray{origin, up.Normalize()}
-	floor.Axes = make([]Vector, N-1)
+	floorAxes := make([]Vector, N-1)
 	for i := 0; i < N-1; i++ {
-		floor.Axes[i] = E(N, i+1)
+		floorAxes[i] = E(N, i+1)
 	}
+	floor := NewHyperCheckboard(Ray{origin, up.Normalize()}, floorAxes)
 
-	ceiling := &HyperCheckerboard{}
-	ceiling.Normal = Ray{up.Scale(2), up.Normalize()}
-	ceiling.Axes = floor.Axes
+	ceiling := NewHyperCheckboard(Ray{up.Scale(2), up.Normalize()}, floorAxes)
 
 	scene := &Scene{}
 	scene.Bodies = []Body{floor, ceiling, sphere}
