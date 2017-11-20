@@ -84,7 +84,7 @@ func (v Vector) Add(w Vector) (ret Vector) {
 	return
 }
 
-func (v Vector) Sub(w Vector) (ret Vector) {
+func (v *Vector) Sub(w Vector) (ret Vector) {
 	for i := 0; i < N; i++ {
 		ret[i] = v[i] - w[i]
 	}
