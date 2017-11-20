@@ -12,7 +12,9 @@ import (
 	"runtime/pprof"
 )
 
-type Vector []float64
+const N = 5
+
+type Vector [N]float64
 type UnitVector Vector
 
 const eps float64 = 1e-9
@@ -69,35 +71,28 @@ type Ray struct {
 	Direction UnitVector
 }
 
-func V(vs ...float64) Vector {
-	return Vector(vs)
-}
-
 // m-th standard basis vector in N dimensions
-func E(N, m int) Vector {
-	res := make([]float64, N)
+func E(N, m int) (res Vector) {
 	res[m] = 1
-	return Vector(res)
+	return
 }
 
-func (v Vector) Add(w Vector) Vector {
-	ret := make([]float64, len(v), len(v))
-	for i := 0; i < len(v); i++ {
+func (v Vector) Add(w Vector) (ret Vector) {
+	for i := 0; i < N; i++ {
 		ret[i] = v[i] + w[i]
 	}
-	return ret
+	return
 }
 
-func (v Vector) Sub(w Vector) Vector {
-	ret := make([]float64, len(v), len(v))
-	for i := 0; i < len(v); i++ {
+func (v Vector) Sub(w Vector) (ret Vector) {
+	for i := 0; i < N; i++ {
 		ret[i] = v[i] - w[i]
 	}
-	return ret
+	return
 }
 
 func (v Vector) Dot(w Vector) (res float64) {
-	for i := 0; i < len(v); i++ {
+	for i := 0; i < N; i++ {
 		res += v[i] * w[i]
 	}
 	return
@@ -107,12 +102,11 @@ func (v Vector) Length() float64 {
 	return math.Sqrt(v.Dot(v))
 }
 
-func (v Vector) Scale(scalar float64) Vector {
-	ret := make([]float64, len(v), len(v))
-	for i := 0; i < len(v); i++ {
+func (v Vector) Scale(scalar float64) (ret Vector) {
+	for i := 0; i < N; i++ {
 		ret[i] = v[i] * scalar
 	}
-	return ret
+	return
 }
 
 func (v Vector) Normalize() UnitVector {
@@ -456,22 +450,15 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	N := 5
 	Hres := 500
 	Vres := 500
 
-	origin := V(make([]float64, N)...)
+	var origin Vector
 	up := E(N, 0)
 
 	sphere := &ReflectiveSphere{}
 
-	scentre := make([]float64, N)
-	scentre[0] = 1
-	scentre[1] = .2
-	scentre[2] = .2
-	scentre[3] = .2
-	scentre[4] = .2
-	sphere.Centre = Vector(scentre)
+	sphere.Centre = [...]float64{1, .2, .2, .2, .2}
 	sphere.Radius = .9
 
 	floor := &HyperCheckerboard{}
@@ -496,7 +483,7 @@ func main() {
 	ccentre[1] = 1
 	ccentre[3] = .06
 	ccentre[4] = .07
-	camera.Centre = Vector(ccentre)
+	camera.Centre = [...]float64{0, 1, 0, .06, .07}
 	camera.Down = origin.Sub(up).Scale(1 / float64(Vres))
 	camera.Right = E(N, 2).Scale(1 / float64(Hres))
 	camera.Hres = Hres
