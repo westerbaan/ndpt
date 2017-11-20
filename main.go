@@ -91,14 +91,14 @@ func (v Vector) Sub(w Vector) (ret Vector) {
 	return
 }
 
-func (v Vector) Dot(w Vector) (res float64) {
+func (v *Vector) Dot(w *Vector) (res float64) {
 	for i := 0; i < N; i++ {
 		res += v[i] * w[i]
 	}
 	return
 }
 
-func (v Vector) Length() float64 {
+func (v *Vector) Length() float64 {
 	return math.Sqrt(v.Dot(v))
 }
 
@@ -118,7 +118,7 @@ func (v Vector) IsZero() bool {
 	return v.Length() < eps
 }
 
-func (v UnitVector) Dot(w Vector) (res float64) {
+func (v *UnitVector) Dot(w Vector) (res float64) {
 	for i := 0; i < N; i++ {
 		res += v[i] * w[i]
 	}
@@ -132,7 +132,7 @@ func (v UnitVector) Scale(scalar float64) Vector {
 // Returns the length of the vector projected onto the line associated with the
 // ray relative to the origin of the ray.
 func (r *Ray) RelativeLength(v Vector) float64 {
-	return v.Sub(r.Origin).Dot(Vector(r.Direction))
+	return r.Direction.Dot(v.Sub(r.Origin))
 }
 
 func (r *Ray) InView(v Vector) bool {
@@ -151,7 +151,7 @@ func (r *Ray) Follow(distance float64) Vector {
 func (incoming UnitVector) Reflect(normal UnitVector) (outgoing UnitVector) {
 	nv := Vector(normal)
 	iv := Vector(incoming)
-	outgoing = iv.Sub(nv.Scale(2 * iv.Dot(nv))).Normalize()
+	outgoing = iv.Sub(nv.Scale(2 * iv.Dot(&nv))).Normalize()
 	return
 }
 
@@ -351,9 +351,11 @@ func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
 		return nil
 	}
 
-	a := projCentre.Sub(sphere.Centre).Length()
+	aVec := projCentre.Sub(sphere.Centre)
+	a := aVec.Length()
 	b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
-	ret.distance = projCentre.Sub(ray.Origin).Length() - b
+	d := projCentre.Sub(ray.Origin)
+	ret.distance = d.Length() - b
 
 	if a >= sphere.Radius {
 		return nil
@@ -383,7 +385,8 @@ func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
 		return nil
 	}
 
-	if ray.Follow(distance).Length() > 15 {
+	intersect := ray.Follow(distance)
+	if intersect.Length() > 15 {
 		return nil
 	}
 
