@@ -128,20 +128,20 @@ func (v UnitVector) Scale(scalar float64) Vector {
 
 // Returns the length of the vector projected onto the line associated with the
 // ray relative to the origin of the ray.
-func (r Ray) RelativeLength(v Vector) float64 {
+func (r *Ray) RelativeLength(v Vector) float64 {
 	return v.Sub(r.Origin).Dot(Vector(r.Direction))
 }
 
-func (r Ray) InView(v Vector) bool {
+func (r *Ray) InView(v Vector) bool {
 	return r.RelativeLength(v) >= 0
 }
 
 // Returns the vector v projected onto the line associated with the ray
-func (r Ray) Project(v Vector) Vector {
+func (r *Ray) Project(v Vector) Vector {
 	return Vector(r.Direction).Scale(r.RelativeLength(v)).Add(r.Origin)
 }
 
-func (r Ray) Follow(distance float64) Vector {
+func (r *Ray) Follow(distance float64) Vector {
 	return r.Origin.Add(r.Direction.Scale(distance))
 }
 
