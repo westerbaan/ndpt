@@ -118,8 +118,11 @@ func (v Vector) IsZero() bool {
 	return v.Length() < eps
 }
 
-func (v UnitVector) Dot(w Vector) float64 {
-	return Vector(v).Dot(w)
+func (v UnitVector) Dot(w Vector) (res float64) {
+	for i := 0; i < N; i++ {
+		res += v[i] * w[i]
+	}
+	return
 }
 
 func (v UnitVector) Scale(scalar float64) Vector {
