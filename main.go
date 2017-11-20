@@ -452,7 +452,6 @@ func (h *hcbHit) Next(rnd *rand.Rand) (ray *Ray, colour *Colour) {
 
 func main() {
 	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile")
-	var memprofile = flag.String("memprofile", "", "write mem profile")
 	flag.Parse()
 
 	if *cpuprofile != "" {
@@ -511,16 +510,4 @@ func main() {
 	file, _ := os.Create("test.png")
 	png.Encode(file, sampler.Shoot(camera).ToNRGBA())
 	file.Close()
-
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		if err != nil {
-			log.Fatal("could not create memory profile: ", err)
-		}
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Fatal("could not write memory profile: ", err)
-		}
-		f.Close()
-	}
 }
