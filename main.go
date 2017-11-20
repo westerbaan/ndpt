@@ -160,7 +160,7 @@ type Hit interface {
 
 	// If hit, computes what happens next.  Returns a Colour if the ray is
 	// emitted/absorped or a Ray if it bounced/reflected/refracted/....
-	Next() (*Ray, *Colour)
+	Next(*rand.Rand) (*Ray, *Colour)
 }
 
 type Body interface {
@@ -200,9 +200,9 @@ type Sampler struct {
 	// the result of the
 }
 
-func (s *Sampler) SampleOne(ray Ray, dx, dy Vector) Colour {
-	dx = dx.Scale(rand.Float64())
-	dy = dy.Scale(rand.Float64())
+func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) Colour {
+	dx = dx.Scale(rnd.Float64())
+	dy = dy.Scale(rnd.Float64())
 
 	ray.Direction = Vector(ray.Direction).Add(dx).Add(dy).Normalize()
 
@@ -212,7 +212,7 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector) Colour {
 		if hit == nil {
 			return Black
 		}
-		rayPtr, colour := hit.Next()
+		rayPtr, colour := hit.Next(rnd)
 		if colour != nil {
 			return *colour
 		}
@@ -222,21 +222,21 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector) Colour {
 	return Black
 }
 
-func (s *Sampler) SampleBatch(ray Ray, size int, dx, dy Vector) (c Colour) {
+func (s *Sampler) SampleBatch(ray Ray, size int, dx, dy Vector, rnd *rand.Rand) (c Colour) {
 	for i := 0; i < size; i++ {
-		c = c.Add(s.SampleOne(ray, dx, dy))
+		c = c.Add(s.SampleOne(ray, dx, dy, rnd))
 	}
 	c = c.Scale(1 / float64(size))
 	return
 }
 
-func (s *Sampler) Sample(ray Ray, dx, dy Vector) Colour {
+func (s *Sampler) Sample(ray Ray, dx, dy Vector, rnd *rand.Rand) Colour {
 	var old, new Colour
 
 	size := s.FirstBatch
 
-	old = s.SampleBatch(ray, size, dx, dy)
-	new = s.SampleBatch(ray, size, dx, dy)
+	old = s.SampleBatch(ray, size, dx, dy, rnd)
+	new = s.SampleBatch(ray, size, dx, dy, rnd)
 
 	for {
 		if old.Sub(new).SupNorm() < s.Target {
@@ -245,7 +245,7 @@ func (s *Sampler) Sample(ray Ray, dx, dy Vector) Colour {
 
 		old = old.Add(new).Scale(.5)
 		size = 2 * size
-		new = s.SampleBatch(ray, size, dx, dy)
+		new = s.SampleBatch(ray, size, dx, dy, rnd)
 	}
 }
 
@@ -266,6 +266,7 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go func() {
+			rnd := rand.New(rand.NewSource(rand.Int63()))
 			for {
 				job, more := <-inCh
 
@@ -280,7 +281,7 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 					right := camera.Right.Scale(float64(2*y-camera.Hres) / 2)
 					point := camera.Centre.Add(down).Add(right)
 					ray := Ray{camera.Origin, point.Normalize()}
-					cols[y] = s.Sample(ray, camera.Right, camera.Down)
+					cols[y] = s.Sample(ray, camera.Right, camera.Down, rnd)
 				}
 
 				outCh <- Result{job.x, cols}
@@ -330,7 +331,7 @@ func (h reflectiveSphereHit) Distance() float64 {
 	return h.distance
 }
 
-func (h reflectiveSphereHit) Next() (ray *Ray, colour *Colour) {
+func (h reflectiveSphereHit) Next(rnd *rand.Rand) (ray *Ray, colour *Colour) {
 	intercept := h.ray.Follow(h.distance)
 	normal := intercept.Sub(h.Sphere.Centre).Normalize()
 	direction := h.ray.Direction.Reflect(normal)
@@ -424,7 +425,7 @@ func (h *hcbHit) Distance() float64 {
 	return h.distance
 }
 
-func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
+func (h *hcbHit) Next(rnd *rand.Rand) (ray *Ray, colour *Colour) {
 	sum := 0
 	for i := 0; i < len(h.board.Axes); i++ {
 		t := h.board.AxisRays[i].RelativeLength(&h.intercept) / h.board.AxisLengths[i]
@@ -432,7 +433,7 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 	}
 	sign := sum % 2
 
-	if rand.Intn(5) != 0 {
+	if rnd.Intn(5) != 0 {
 		if sign == 1 {
 			colour = &Black
 		} else {
