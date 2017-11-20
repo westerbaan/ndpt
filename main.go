@@ -131,16 +131,16 @@ func (v UnitVector) Scale(scalar float64) Vector {
 
 // Returns the length of the vector projected onto the line associated with the
 // ray relative to the origin of the ray.
-func (r *Ray) RelativeLength(v Vector) float64 {
+func (r *Ray) RelativeLength(v *Vector) float64 {
 	return r.Direction.Dot(v.Sub(r.Origin))
 }
 
-func (r *Ray) InView(v Vector) bool {
+func (r *Ray) InView(v *Vector) bool {
 	return r.RelativeLength(v) >= 0
 }
 
 // Returns the vector v projected onto the line associated with the ray
-func (r *Ray) Project(v Vector) Vector {
+func (r *Ray) Project(v *Vector) Vector {
 	return Vector(r.Direction).Scale(r.RelativeLength(v)).Add(r.Origin)
 }
 
@@ -345,9 +345,9 @@ func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
 	var ret reflectiveSphereHit
 	ret.ray = ray
 	ret.Sphere = sphere
-	projCentre := ray.Project(sphere.Centre)
+	projCentre := ray.Project(&sphere.Centre)
 
-	if !ray.InView(projCentre) {
+	if !ray.InView(&projCentre) {
 		return nil
 	}
 
@@ -370,7 +370,7 @@ type HyperCheckerboard struct {
 }
 
 func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
-	offset := b.Normal.RelativeLength(ray.Origin)
+	offset := b.Normal.RelativeLength(&ray.Origin)
 	direction := b.Normal.Direction.Dot(Vector(ray.Direction))
 
 	if math.Abs(direction) <= eps {
@@ -413,7 +413,7 @@ func (h *hcbHit) Next() (ray *Ray, colour *Colour) {
 
 	for i := 0; i < len(t); i++ {
 		axisray := Ray{h.board.Origin(), h.board.Axes[i].Normalize()}
-		t[i] = axisray.RelativeLength(intercept)
+		t[i] = axisray.RelativeLength(&intercept)
 		t[i] = t[i] / h.board.Axes[i].Length()
 	}
 
