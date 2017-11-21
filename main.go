@@ -77,14 +77,14 @@ func E(N, m int) (res Vector) {
 	return
 }
 
-func (v Vector) Add(w Vector) (ret Vector) {
+func (v Vector) Add(w *Vector) (ret Vector) {
 	for i := 0; i < N; i++ {
 		ret[i] = v[i] + w[i]
 	}
 	return
 }
 
-func (v *Vector) Sub(w Vector) (ret Vector) {
+func (v *Vector) Sub(w *Vector) (ret Vector) {
 	for i := 0; i < N; i++ {
 		ret[i] = v[i] - w[i]
 	}
@@ -118,21 +118,25 @@ func (v Vector) IsZero() bool {
 	return v.Length() < eps
 }
 
-func (v *UnitVector) Dot(w Vector) (res float64) {
+func (v *UnitVector) Dot(w *Vector) (res float64) {
 	for i := 0; i < N; i++ {
 		res += v[i] * w[i]
 	}
 	return
 }
 
-func (v UnitVector) Scale(scalar float64) Vector {
-	return Vector(v).Scale(scalar)
+func (v UnitVector) Scale(scalar float64) (ret Vector) {
+	for i := 0; i < N; i++ {
+		ret[i] = v[i] * scalar
+	}
+	return
 }
 
 // Returns the length of the vector projected onto the line associated with the
 // ray relative to the origin of the ray.
 func (r *Ray) RelativeLength(v *Vector) float64 {
-	return r.Direction.Dot(v.Sub(r.Origin))
+	moved := v.Sub(&r.Origin)
+	return r.Direction.Dot(&moved)
 }
 
 func (r *Ray) InView(v *Vector) bool {
@@ -141,17 +145,18 @@ func (r *Ray) InView(v *Vector) bool {
 
 // Returns the vector v projected onto the line associated with the ray
 func (r *Ray) Project(v *Vector) Vector {
-	return Vector(r.Direction).Scale(r.RelativeLength(v)).Add(r.Origin)
+	return r.Direction.Scale(r.RelativeLength(v)).Add(&r.Origin)
 }
 
 func (r *Ray) Follow(distance float64) Vector {
-	return r.Origin.Add(r.Direction.Scale(distance))
+	return r.Direction.Scale(distance).Add(&r.Origin)
 }
 
 func (incoming UnitVector) Reflect(normal UnitVector) (outgoing UnitVector) {
 	nv := Vector(normal)
 	iv := Vector(incoming)
-	outgoing = iv.Sub(nv.Scale(2 * iv.Dot(&nv))).Normalize()
+	v2 := nv.Scale(2 * iv.Dot(&nv))
+	outgoing = iv.Sub(&v2).Normalize()
 	return
 }
 
@@ -224,7 +229,7 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) (ret Colour)
 	var colour Colour
 	var lambda float64
 
-	ray.Direction = Vector(ray.Direction).Add(dx).Add(dy).Normalize()
+	ray.Direction = Vector(ray.Direction).Add(&dx).Add(&dy).Normalize()
 
 	body := s.Root
 	for i := 0; i < s.MaxBounces; i++ {
@@ -323,7 +328,7 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 				for y := 0; y < camera.Hres; y++ {
 					down := camera.Down.Scale(float64(2*job.x-camera.Vres) / 2)
 					right := camera.Right.Scale(float64(2*y-camera.Hres) / 2)
-					point := camera.Centre.Add(down).Add(right)
+					point := camera.Centre.Add(&down).Add(&right)
 					ray := Ray{camera.Origin, point.Normalize()}
 					cols[y] = s.Sample(ray, camera.Right, camera.Down, rnd)
 				}
@@ -371,7 +376,7 @@ func (scene *Scene) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, col
 
 func (sphere *ReflectiveSphere) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, colour Colour) {
 	lambda = 1
-	normal := hit.intercept.Sub(sphere.Centre).Normalize()
+	normal := hit.intercept.Sub(&sphere.Centre).Normalize()
 	direction := hit.ray.Direction.Reflect(normal)
 
 	ray = Ray{hit.intercept, direction}
@@ -387,7 +392,7 @@ func (sphere *ReflectiveSphere) Intersect(ray Ray, hit *Hit) bool {
 		return false
 	}
 
-	aVec := projCentre.Sub(sphere.Centre)
+	aVec := projCentre.Sub(&sphere.Centre)
 	a := aVec.Length()
 
 	if a >= sphere.Radius {
@@ -395,7 +400,7 @@ func (sphere *ReflectiveSphere) Intersect(ray Ray, hit *Hit) bool {
 	}
 
 	b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
-	d := projCentre.Sub(ray.Origin)
+	d := projCentre.Sub(&ray.Origin)
 	hit.distance = d.Length() - b
 	hit.intercept = hit.ray.Follow(hit.distance)
 
@@ -427,7 +432,7 @@ func (b *HyperCheckerboard) Intersect(ray Ray, hit *Hit) bool {
 	hit.body = b
 	hit.ray = ray
 	offset := b.Normal.RelativeLength(&ray.Origin)
-	direction := b.Normal.Direction.Dot(Vector(ray.Direction))
+	direction := b.Normal.Direction.Dot((*Vector)(&ray.Direction))
 
 	if math.Abs(direction) <= eps {
 		// ray is parallel to hyperplane - not hit
@@ -522,7 +527,7 @@ func main() {
 	scene.Bodies = []Body{floor, ceiling, sphere}
 
 	camera := Camera{}
-	camera.Origin = sphere.Centre.Add(E(N, 1).Scale(-3))
+	camera.Origin = E(N, 1).Scale(-3).Add(&sphere.Centre)
 
 	ccentre := make([]float64, N)
 	ccentre[0] = 0
@@ -530,7 +535,7 @@ func main() {
 	ccentre[3] = .06
 	ccentre[4] = .07
 	camera.Centre = [...]float64{0, 1, 0, .06, .07}
-	camera.Down = origin.Sub(up).Scale(1 / float64(Vres))
+	camera.Down = origin.Sub(&up).Scale(1 / float64(Vres))
 	camera.Right = E(N, 2).Scale(1 / float64(Hres))
 	camera.Hres = Hres
 	camera.Vres = Vres
