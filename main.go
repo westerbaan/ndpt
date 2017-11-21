@@ -223,6 +223,9 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) (ret Colour)
 		}
 		ret = ret.Add(colour.Scale(factor * (1 - lambda)))
 		factor *= lambda
+		if factor < s.Target {
+			return
+		}
 		ray = *rayPtr
 	}
 	log.Print("MaxBounces hit :(")
@@ -510,8 +513,8 @@ func main() {
 	sampler := &Sampler{}
 	sampler.Root = scene
 	sampler.MaxBounces = 20
-	sampler.FirstBatch = 30
-	sampler.Target = .05
+	sampler.FirstBatch = 10
+	sampler.Target = .02
 
 	file, _ := os.Create("test.png")
 	png.Encode(file, sampler.Shoot(camera).ToNRGBA())
