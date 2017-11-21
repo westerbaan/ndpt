@@ -158,9 +158,12 @@ func (incoming UnitVector) Reflect(normal UnitVector) (outgoing UnitVector) {
 type Hit interface {
 	Distance() float64
 
-	// If hit, computes what happens next.  Returns a Colour if the ray is
-	// emitted/absorped or a Ray if it bounced/reflected/refracted/....
-	Next(*rand.Rand) (*Ray, *Colour)
+	// If hit, computes what happens next.  Returns a
+	// triplet (lambda, ray, colour) which should be understood as a
+	// convex combination lambda | ray > + (1 - lambda) | colour >,
+	// where colour is the absorped part and ray is the reflected/refracted/etc
+	// ray.
+	Next(*rand.Rand) (float64, *Ray, Colour)
 }
 
 type Body interface {
@@ -200,9 +203,10 @@ type Sampler struct {
 	// the result of the
 }
 
-func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) Colour {
+func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) (ret Colour) {
 	dx = dx.Scale(rnd.Float64())
 	dy = dy.Scale(rnd.Float64())
+	var factor float64 = 1.0
 
 	ray.Direction = Vector(ray.Direction).Add(dx).Add(dy).Normalize()
 
@@ -210,12 +214,15 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) Colour {
 	for i := 0; i < s.MaxBounces; i++ {
 		hit := body.Intersect(ray)
 		if hit == nil {
-			return Black
+			return
 		}
-		rayPtr, colour := hit.Next(rnd)
-		if colour != nil {
-			return *colour
+		lambda, rayPtr, colour := hit.Next(rnd)
+		if lambda == 0 {
+			ret = ret.Add(colour.Scale(factor))
+			return
 		}
+		ret = ret.Add(colour.Scale(factor * (1 - lambda)))
+		factor *= lambda
 		ray = *rayPtr
 	}
 	log.Print("MaxBounces hit :(")
@@ -331,7 +338,8 @@ func (h reflectiveSphereHit) Distance() float64 {
 	return h.distance
 }
 
-func (h reflectiveSphereHit) Next(rnd *rand.Rand) (ray *Ray, colour *Colour) {
+func (h reflectiveSphereHit) Next(rnd *rand.Rand) (lambda float64, ray *Ray, colour Colour) {
+	lambda = 1
 	intercept := h.ray.Follow(h.distance)
 	normal := intercept.Sub(h.Sphere.Centre).Normalize()
 	direction := h.ray.Direction.Reflect(normal)
@@ -425,7 +433,8 @@ func (h *hcbHit) Distance() float64 {
 	return h.distance
 }
 
-func (h *hcbHit) Next(rnd *rand.Rand) (ray *Ray, colour *Colour) {
+func (h *hcbHit) Next(rnd *rand.Rand) (lambda float64, ray *Ray, colour Colour) {
+	lambda = 0.2
 	sum := 0
 	for i := 0; i < len(h.board.Axes); i++ {
 		t := h.board.AxisRays[i].RelativeLength(&h.intercept) / h.board.AxisLengths[i]
@@ -433,13 +442,10 @@ func (h *hcbHit) Next(rnd *rand.Rand) (ray *Ray, colour *Colour) {
 	}
 	sign := sum % 2
 
-	if rnd.Intn(5) != 0 {
-		if sign == 1 {
-			colour = &Black
-		} else {
-			colour = &White
-		}
-		return
+	if sign == 1 {
+		colour = Black
+	} else {
+		colour = White
 	}
 
 	ray = &Ray{
