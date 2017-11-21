@@ -2,14 +2,17 @@ package main
 
 import (
 	"flag"
+	"github.com/google/gxui"
+	"github.com/google/gxui/drivers/gl"
+	"github.com/google/gxui/themes/dark"
 	"image"
-	"image/png"
 	"log"
 	"math"
 	"math/rand"
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"time"
 )
 
 const N = 5
@@ -49,21 +52,6 @@ func (c Colour) Scale(scalar float64) Colour {
 
 func (c Colour) SupNorm() float64 {
 	return math.Max(math.Abs(c.R), math.Max(math.Abs(c.G), math.Abs(c.B)))
-}
-
-type Image struct {
-	Height, Width int
-	Pixels        [][]Colour
-}
-
-func (imag *Image) ToNRGBA() (nrgba *image.NRGBA) {
-	nrgba = image.NewNRGBA(image.Rect(0, 0, imag.Width, imag.Height))
-	for i := 0; i < imag.Height; i++ {
-		for j := 0; j < imag.Width; j++ {
-			nrgba.Set(j, i, imag.Pixels[i][j])
-		}
-	}
-	return
 }
 
 type Ray struct {
@@ -298,12 +286,7 @@ func (s *Sampler) Sample(ray Ray, dx, dy Vector, rnd *rand.Rand) Colour {
 	}
 }
 
-func (s *Sampler) Shoot(camera Camera) (imag *Image) {
-	imag = &Image{}
-	imag.Height = camera.Vres
-	imag.Width = camera.Hres
-	imag.Pixels = make([][]Colour, camera.Vres)
-
+func (s *Sampler) Shoot(camera Camera, imag *image.RGBA) {
 	type Job struct{ x int }
 	type Result struct {
 		x   int
@@ -339,7 +322,6 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 	}
 
 	for i := 0; i < camera.Vres; i++ {
-		imag.Pixels[i] = make([]Colour, camera.Hres)
 		inCh <- Job{i}
 	}
 	close(inCh)
@@ -348,7 +330,7 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 	for {
 		res := <-outCh
 		for y := 0; y < camera.Hres; y++ {
-			imag.Pixels[res.x][y] = res.col[y]
+			imag.Set(y, res.x, res.col[y])
 		}
 		nPixels += camera.Hres
 		log.Printf("%d pixels", nPixels)
@@ -356,8 +338,6 @@ func (s *Sampler) Shoot(camera Camera) (imag *Image) {
 			break
 		}
 	}
-
-	return imag
 }
 
 type Camera struct {
@@ -504,6 +484,10 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	gl.StartDriver(glMain)
+}
+
+func glMain(driver gxui.Driver) {
 	Hres := 500
 	Vres := 500
 
@@ -544,9 +528,33 @@ func main() {
 	sampler.Root = scene
 	sampler.MaxBounces = 20
 	sampler.FirstBatch = 10
-	sampler.Target = .02
 
-	file, _ := os.Create("test.png")
-	png.Encode(file, sampler.Shoot(camera).ToNRGBA())
-	file.Close()
+	// UI stuff
+	m := image.NewRGBA(image.Rect(0, 0, Hres, Vres))
+	theme := dark.CreateTheme(driver)
+	img := theme.CreateImage()
+	window := theme.CreateWindow(Hres, Vres, "ndpt")
+	window.AddChild(img)
+	window.OnClose(driver.Terminate)
+
+	// render render
+	go func() {
+		sampler.Target = .5
+		sampler.Shoot(camera, m)
+		sampler.Target = .05
+		sampler.Shoot(camera, m)
+		sampler.Target = .01
+		sampler.Shoot(camera, m)
+
+	}()
+
+	go func() {
+		for {
+			time.Sleep(100 * time.Millisecond)
+			driver.Call(func() {
+				texture := driver.CreateTexture(m, 1.0)
+				img.SetTexture(texture)
+			})
+		}
+	}()
 }
