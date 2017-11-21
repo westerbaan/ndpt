@@ -155,19 +155,22 @@ func (incoming UnitVector) Reflect(normal UnitVector) (outgoing UnitVector) {
 	return
 }
 
-type Hit interface {
-	Distance() float64
+type Hit struct {
+	distance  float64
+	body      Body
+	ray       Ray
+	intercept Vector
+}
+
+type Body interface {
+	Intersect(Ray, *Hit) bool
 
 	// If hit, computes what happens next.  Returns a
 	// triplet (lambda, ray, colour) which should be understood as a
 	// convex combination lambda | ray > + (1 - lambda) | colour >,
 	// where colour is the absorped part and ray is the reflected/refracted/etc
 	// ray.
-	Next(*rand.Rand) (float64, *Ray, Colour)
-}
-
-type Body interface {
-	Intersect(Ray) Hit
+	Next(*Hit, *rand.Rand) (float64, Ray, Colour)
 }
 
 type Scene struct {
@@ -176,21 +179,31 @@ type Scene struct {
 
 // Scene currently simply checks all bodies for a hit.  For a bigger scenes,
 // we might want to add bounding boxes to Body's and add a tree.
-func (s *Scene) Intersect(ray Ray) Hit {
-	var minDistHit Hit
+func (s *Scene) Intersect(ray Ray, minDistHit *Hit) (ok bool) {
+	var hit Hit
 	minDist := math.Inf(1)
 	for _, body := range s.Bodies {
-		hit := body.Intersect(ray)
-		if hit == nil {
+		var ok2 bool
+		switch body2 := body.(type) {
+		case *Scene:
+			ok2 = body2.Intersect(ray, &hit)
+		case *HyperCheckerboard:
+			ok2 = body2.Intersect(ray, &hit)
+		case *ReflectiveSphere:
+			ok2 = body2.Intersect(ray, &hit)
+		default:
+			panic("eh?")
+		}
+		if !ok2 {
 			continue
 		}
-		dist := hit.Distance()
-		if dist < minDist && dist > eps {
-			minDist = dist
-			minDistHit = hit
+		if hit.distance < minDist && hit.distance > eps {
+			minDist = hit.distance
+			*minDistHit = hit
+			ok = true
 		}
 	}
-	return minDistHit
+	return
 }
 
 type Sampler struct {
@@ -207,16 +220,38 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) (ret Colour)
 	dx = dx.Scale(rnd.Float64())
 	dy = dy.Scale(rnd.Float64())
 	var factor float64 = 1.0
+	var hit Hit
+	var colour Colour
+	var lambda float64
 
 	ray.Direction = Vector(ray.Direction).Add(dx).Add(dy).Normalize()
 
 	body := s.Root
 	for i := 0; i < s.MaxBounces; i++ {
-		hit := body.Intersect(ray)
-		if hit == nil {
+		var ok bool
+		switch body2 := body.(type) {
+		case *Scene:
+			ok = body2.Intersect(ray, &hit)
+		case *HyperCheckerboard:
+			ok = body2.Intersect(ray, &hit)
+		case *ReflectiveSphere:
+			ok = body2.Intersect(ray, &hit)
+		default:
+			panic("eh?")
+		}
+		if !ok {
 			return
 		}
-		lambda, rayPtr, colour := hit.Next(rnd)
+		switch body2 := hit.body.(type) {
+		case *Scene:
+			lambda, ray, colour = body2.Next(&hit, rnd)
+		case *HyperCheckerboard:
+			lambda, ray, colour = body2.Next(&hit, rnd)
+		case *ReflectiveSphere:
+			lambda, ray, colour = body2.Next(&hit, rnd)
+		default:
+			panic("eh?")
+		}
 		if lambda == 0 {
 			ret = ret.Add(colour.Scale(factor))
 			return
@@ -226,7 +261,6 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) (ret Colour)
 		if factor < s.Target {
 			return
 		}
-		ray = *rayPtr
 	}
 	log.Print("MaxBounces hit :(")
 	return Black
@@ -331,49 +365,41 @@ type ReflectiveSphere struct {
 	Radius float64
 }
 
-type reflectiveSphereHit struct {
-	ray      Ray
-	Sphere   *ReflectiveSphere
-	distance float64
+func (scene *Scene) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, colour Colour) {
+	panic("Scene.Next() should not have been called")
 }
 
-func (h reflectiveSphereHit) Distance() float64 {
-	return h.distance
-}
-
-func (h reflectiveSphereHit) Next(rnd *rand.Rand) (lambda float64, ray *Ray, colour Colour) {
+func (sphere *ReflectiveSphere) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, colour Colour) {
 	lambda = 1
-	intercept := h.ray.Follow(h.distance)
-	normal := intercept.Sub(h.Sphere.Centre).Normalize()
-	direction := h.ray.Direction.Reflect(normal)
+	normal := hit.intercept.Sub(sphere.Centre).Normalize()
+	direction := hit.ray.Direction.Reflect(normal)
 
-	ray = &Ray{intercept, direction}
-
-	//colour = &White
+	ray = Ray{hit.intercept, direction}
 	return
 }
 
-func (sphere *ReflectiveSphere) Intersect(ray Ray) Hit {
-	var ret reflectiveSphereHit
-	ret.ray = ray
-	ret.Sphere = sphere
+func (sphere *ReflectiveSphere) Intersect(ray Ray, hit *Hit) bool {
+	hit.ray = ray
+	hit.body = sphere
 	projCentre := ray.Project(&sphere.Centre)
 
 	if !ray.InView(&projCentre) {
-		return nil
+		return false
 	}
 
 	aVec := projCentre.Sub(sphere.Centre)
 	a := aVec.Length()
-	b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
-	d := projCentre.Sub(ray.Origin)
-	ret.distance = d.Length() - b
 
 	if a >= sphere.Radius {
-		return nil
+		return false
 	}
 
-	return &ret
+	b := math.Sqrt(sphere.Radius*sphere.Radius - a*a)
+	d := projCentre.Sub(ray.Origin)
+	hit.distance = d.Length() - b
+	hit.intercept = hit.ray.Follow(hit.distance)
+
+	return true
 }
 
 type HyperCheckerboard struct {
@@ -397,28 +423,30 @@ func NewHyperCheckboard(normal Ray, axes []Vector) *HyperCheckerboard {
 	return ret
 }
 
-func (b *HyperCheckerboard) Intersect(ray Ray) Hit {
+func (b *HyperCheckerboard) Intersect(ray Ray, hit *Hit) bool {
+	hit.body = b
+	hit.ray = ray
 	offset := b.Normal.RelativeLength(&ray.Origin)
 	direction := b.Normal.Direction.Dot(Vector(ray.Direction))
 
 	if math.Abs(direction) <= eps {
 		// ray is parallel to hyperplane - not hit
-		return nil
+		return false
 	}
 
-	distance := -offset / direction
+	hit.distance = -offset / direction
 
-	if distance < 0 {
+	if hit.distance < 0 {
 		// ray moved away from the hyperplane - not hit
-		return nil
+		return false
 	}
 
-	intercept := ray.Follow(distance)
-	if intercept.Length() > 15 {
-		return nil
+	hit.intercept = ray.Follow(hit.distance)
+	if hit.intercept.Length() > 15 {
+		return false
 	}
 
-	return &hcbHit{ray, b, distance, intercept}
+	return true
 }
 
 func (b *HyperCheckerboard) Origin() Vector {
@@ -436,11 +464,11 @@ func (h *hcbHit) Distance() float64 {
 	return h.distance
 }
 
-func (h *hcbHit) Next(rnd *rand.Rand) (lambda float64, ray *Ray, colour Colour) {
+func (b *HyperCheckerboard) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, colour Colour) {
 	lambda = 0.2
 	sum := 0
-	for i := 0; i < len(h.board.Axes); i++ {
-		t := h.board.AxisRays[i].RelativeLength(&h.intercept) / h.board.AxisLengths[i]
+	for i := 0; i < len(b.Axes); i++ {
+		t := b.AxisRays[i].RelativeLength(&hit.intercept) / b.AxisLengths[i]
 		sum += int(math.Abs(math.Floor(t)))
 	}
 	sign := sum % 2
@@ -451,11 +479,8 @@ func (h *hcbHit) Next(rnd *rand.Rand) (lambda float64, ray *Ray, colour Colour) 
 		colour = White
 	}
 
-	ray = &Ray{
-		Origin:    h.intercept,
-		Direction: h.ray.Direction.Reflect(h.board.Normal.Direction),
-	}
-
+	ray.Origin = hit.intercept
+	ray.Direction = hit.ray.Direction.Reflect(b.Normal.Direction)
 	return
 }
 
