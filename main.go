@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const N = 5
+const N = 41
 
 type Vector [N]float64
 type UnitVector Vector
@@ -495,7 +495,6 @@ func glMain(driver gxui.Driver) {
 
 	sphere := &ReflectiveSphere{}
 
-	sphere.Centre = [...]float64{0, 0, 0, 0, 0}
 	sphere.Radius = 0.90
 
 	floorAxes := make([]Vector, N-1)
@@ -509,18 +508,30 @@ func glMain(driver gxui.Driver) {
 	scene.Bodies = []Body{floor, ceiling, sphere}
 
 	camera := Camera{}
-	camera.Origin = [...]float64{0, -2, -2, 0, 0}
+	camera.Origin[1] = -2
+	camera.Origin[2] = -2
 
 	camera.Centre = camera.Origin.Scale(-.4)
 
 	// camera.Down = [...]float64{-1, 0, 0, 0, 0}
 	// camera.Down = [...]float64{-1, 0, 0, 0, 1}
-	camera.Down = [...]float64{-1, 0, 0, 0, 0.5}
-	camera.Down = camera.Down.Normalize().Scale(1 / float64(Vres))
+	camera.Down[0] = -1
+	camera.Right[1] = 1
+	camera.Right[2] = -1
 
+	for i := 0; i < (N-3)/2; i++ {
+		camera.Right[3+2*i] = math.Pow(2, -float64(i)-1)
+		camera.Down[4+2*i] = math.Pow(2, -float64(i)-1)
+	}
+
+	// camera.Down = [...]float64{-1, 0, 0, 0, 0.5, 0, .25, 0, .125}
+	// camera.Down = [...]float64{-1, 0, 0, 0, 0.5, 0, 0}
 	// camera.Right = [...]float64{0, 1, -1, 0, 0}
-	camera.Right = [...]float64{0, 1, -1, .5, 0}
+	// camera.Right = [...]float64{0, 1, -1, .5, 0, .25, 0, .125, 0}
+	// camera.Right = [...]float64{0, 1, -1, .5, 0, 0, 0}
+
 	camera.Right = camera.Right.Normalize().Scale(1 / float64(Hres))
+	camera.Down = camera.Down.Normalize().Scale(1 / float64(Vres))
 	camera.Hres = Hres
 	camera.Vres = Vres
 
