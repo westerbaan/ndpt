@@ -488,39 +488,39 @@ func main() {
 }
 
 func glMain(driver gxui.Driver) {
-	Hres := 500
-	Vres := 500
+	Hres := 750
+	Vres := 750
 
-	var origin Vector
-	up := E(N, 0)
+	e0 := E(N, 0)
 
 	sphere := &ReflectiveSphere{}
 
-	sphere.Centre = [...]float64{1, .2, .2, .2, .2}
-	sphere.Radius = .9
+	sphere.Centre = [...]float64{0, 0, 0, 0, 0}
+	sphere.Radius = 0.90
 
 	floorAxes := make([]Vector, N-1)
 	for i := 0; i < N-1; i++ {
 		floorAxes[i] = E(N, i+1)
 	}
-	floor := NewHyperCheckboard(Ray{origin, up.Normalize()}, floorAxes)
-
-	ceiling := NewHyperCheckboard(Ray{up.Scale(2), up.Normalize()}, floorAxes)
+	floor := NewHyperCheckboard(Ray{e0, e0.Scale(-1).Normalize()}, floorAxes)
+	ceiling := NewHyperCheckboard(Ray{e0.Scale(-1), e0.Normalize()}, floorAxes)
 
 	scene := &Scene{}
 	scene.Bodies = []Body{floor, ceiling, sphere}
 
 	camera := Camera{}
-	camera.Origin = E(N, 1).Scale(-3).Add(&sphere.Centre)
+	camera.Origin = [...]float64{0, -2, -2, 0, 0}
 
-	ccentre := make([]float64, N)
-	ccentre[0] = 0
-	ccentre[1] = 1
-	ccentre[3] = .06
-	ccentre[4] = .07
-	camera.Centre = [...]float64{0, 1, 0, .06, .07}
-	camera.Down = origin.Sub(&up).Scale(1 / float64(Vres))
-	camera.Right = E(N, 2).Scale(1 / float64(Hres))
+	camera.Centre = camera.Origin.Scale(-.4)
+
+	// camera.Down = [...]float64{-1, 0, 0, 0, 0}
+	// camera.Down = [...]float64{-1, 0, 0, 0, 1}
+	camera.Down = [...]float64{-1, 0, 0, 0, 0.5}
+	camera.Down = camera.Down.Normalize().Scale(1 / float64(Vres))
+
+	// camera.Right = [...]float64{0, 1, -1, 0, 0}
+	camera.Right = [...]float64{0, 1, -1, .5, 0}
+	camera.Right = camera.Right.Normalize().Scale(1 / float64(Hres))
 	camera.Hres = Hres
 	camera.Vres = Vres
 
@@ -531,6 +531,7 @@ func glMain(driver gxui.Driver) {
 
 	// UI stuff
 	m := image.NewRGBA(image.Rect(0, 0, Hres, Vres))
+
 	theme := dark.CreateTheme(driver)
 	img := theme.CreateImage()
 	window := theme.CreateWindow(Hres, Vres, "ndpt")
@@ -539,13 +540,14 @@ func glMain(driver gxui.Driver) {
 
 	// render render
 	go func() {
-		sampler.Target = .5
+		sampler.Target = .9
 		sampler.Shoot(camera, m)
 		sampler.Target = .05
 		sampler.Shoot(camera, m)
 		sampler.Target = .01
 		sampler.Shoot(camera, m)
-
+		sampler.Target = .005
+		sampler.Shoot(camera, m)
 	}()
 
 	go func() {
