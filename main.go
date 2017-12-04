@@ -2,9 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/google/gxui"
-	"github.com/google/gxui/drivers/gl"
-	"github.com/google/gxui/themes/dark"
 	"image"
 	"log"
 	"math"
@@ -13,6 +10,10 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"time"
+
+	"github.com/google/gxui"
+	"github.com/google/gxui/drivers/gl"
+	"github.com/google/gxui/themes/dark"
 )
 
 const N = 41
