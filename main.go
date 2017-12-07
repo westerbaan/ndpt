@@ -16,7 +16,7 @@ import (
 	"github.com/google/gxui/themes/dark"
 )
 
-const N = 3
+const N = 5
 
 type Vector [N]float64
 type UnitVector Vector
@@ -382,7 +382,10 @@ func NewReflectiveTorus(centre Vector) *ReflectiveTorus {
 
 	ret.centre = centre
 
-	for i := 0; i < N; i++ {
+	ret.P2[0] = 1
+	ret.P1[1] = 1
+
+	for i := 2; i < N; i++ {
 		if i%2 == 0 {
 			ret.P1[i] = 1
 		} else {
