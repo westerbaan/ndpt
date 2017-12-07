@@ -16,7 +16,7 @@ import (
 	"github.com/google/gxui/themes/dark"
 )
 
-const N = 41
+const N = 3
 
 type Vector [N]float64
 type UnitVector Vector
@@ -37,6 +37,7 @@ func (c Colour) RGBA() (r, g, b, a uint32) {
 }
 
 var Black Colour = Colour{0, 0, 0}
+var Red Colour = Colour{1, 0, 0}
 var White Colour = Colour{1, 1, 1}
 
 func (c Colour) Add(d Colour) Colour {
@@ -66,6 +67,13 @@ func E(N, m int) (res Vector) {
 	return
 }
 
+func (v Vector) Prod(w *Vector) (ret Vector) {
+	for i := 0; i < N; i++ {
+		ret[i] = v[i] * w[i]
+	}
+	return
+}
+
 func (v Vector) Add(w *Vector) (ret Vector) {
 	for i := 0; i < N; i++ {
 		ret[i] = v[i] + w[i]
@@ -85,6 +93,14 @@ func (v *Vector) Dot(w *Vector) (res float64) {
 		res += v[i] * w[i]
 	}
 	return
+}
+
+func (v Vector) cLength() float64 {
+	var res float64
+	for i := 0; i < N; i++ {
+		res += v[i] * v[i]
+	}
+	return math.Sqrt(res)
 }
 
 func (v *Vector) Length() float64 {
@@ -185,6 +201,8 @@ func (s *Scene) Intersect(ray Ray, minDistHit *Hit) (ok bool) {
 			ok2 = body2.Intersect(ray, &hit)
 		case *ReflectiveSphere:
 			ok2 = body2.Intersect(ray, &hit)
+		case *ReflectiveTorus:
+			ok2 = body2.Intersect(ray, &hit)
 		default:
 			panic("eh?")
 		}
@@ -230,6 +248,8 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) (ret Colour)
 			ok = body2.Intersect(ray, &hit)
 		case *ReflectiveSphere:
 			ok = body2.Intersect(ray, &hit)
+		case *ReflectiveTorus:
+			ok = body2.Intersect(ray, &hit)
 		default:
 			panic("eh?")
 		}
@@ -242,6 +262,8 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) (ret Colour)
 		case *HyperCheckerboard:
 			lambda, ray, colour = body2.Next(&hit, rnd)
 		case *ReflectiveSphere:
+			lambda, ray, colour = body2.Next(&hit, rnd)
+		case *ReflectiveTorus:
 			lambda, ray, colour = body2.Next(&hit, rnd)
 		default:
 			panic("eh?")
@@ -257,7 +279,7 @@ func (s *Sampler) SampleOne(ray Ray, dx, dy Vector, rnd *rand.Rand) (ret Colour)
 		}
 	}
 	log.Print("MaxBounces hit :(")
-	return Black
+	return Red
 }
 
 func (s *Sampler) SampleBatch(ray Ray, size int, dx, dy Vector, rnd *rand.Rand) (c Colour) {
@@ -346,6 +368,34 @@ type Camera struct {
 	Hres, Vres                  int
 }
 
+type ReflectiveTorus struct {
+	Radius float64
+	P1, P2 Vector
+
+	centre  Vector
+	centre1 Vector
+	centre2 Vector
+}
+
+func NewReflectiveTorus(centre Vector) *ReflectiveTorus {
+	var ret ReflectiveTorus
+
+	ret.centre = centre
+
+	for i := 0; i < N; i++ {
+		if i%2 == 0 {
+			ret.P1[i] = 1
+		} else {
+			ret.P2[i] = 1
+		}
+	}
+
+	ret.centre1 = ret.centre.Prod(&ret.P1)
+	ret.centre2 = ret.centre.Prod(&ret.P2)
+
+	return &ret
+}
+
 type ReflectiveSphere struct {
 	Centre Vector
 	Radius float64
@@ -353,6 +403,95 @@ type ReflectiveSphere struct {
 
 func (scene *Scene) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, colour Colour) {
 	panic("Scene.Next() should not have been called")
+}
+
+// Finds least positive x such that both a1 <= x <= a2 and b1 <= x <= b2.
+// Assumes a1 <= a2 and b1 <= b2.
+func LeastPositiveIntersection(a1, a2, b1, b2 float64, x *float64) bool {
+	// easy cases
+	if b2 < 0 || a2 < 0 {
+		return false
+	}
+	// case 1: [   a    ]
+	//                     [  b   ]     or vice versa
+	if a2 < b1 || b2 < a1 {
+		return false
+	}
+	// case 2: [      a    ]
+	//                [     b   ??
+	if a1 <= b1 {
+		if b1 >= 0 {
+			*x = b1
+		} else {
+			*x = 0 // we know a2, b2 >= 0
+		}
+		return true
+	}
+	// case 2': [      b    ]
+	//                [     a   ??
+	if a1 >= 0 {
+		*x = a1
+	} else {
+		*x = 0
+	}
+	return true
+}
+
+func (torus *ReflectiveTorus) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, colour Colour) {
+	lambda = 1
+	intercept1 := hit.intercept.Prod(&torus.P1)
+	intercept2 := hit.intercept.Prod(&torus.P2)
+	speed1 := Vector(hit.ray.Direction).Prod(&torus.P1).cLength()
+	speed2 := Vector(hit.ray.Direction).Prod(&torus.P2).cLength()
+	normal1 := Vector(intercept1.Sub(&torus.centre1).Normalize()).Scale(speed1)
+	normal2 := Vector(intercept2.Sub(&torus.centre2).Normalize()).Scale(speed2)
+	normal := normal1.Add(&normal2).Normalize()
+
+	direction := hit.ray.Direction.Reflect(normal)
+	ray = Ray{hit.intercept, direction}
+	return
+}
+
+func (torus *ReflectiveTorus) Intersect(ray Ray, hit *Hit) bool {
+
+	hit.ray = ray
+	hit.body = torus
+	ray1 := Ray{ray.Origin.Prod(&torus.P1), Vector(ray.Direction).Prod(&torus.P1).Normalize()}
+	ray2 := Ray{ray.Origin.Prod(&torus.P2), Vector(ray.Direction).Prod(&torus.P2).Normalize()}
+	speed1 := Vector(ray.Direction).Prod(&torus.P1).cLength()
+	speed2 := Vector(ray.Direction).Prod(&torus.P2).cLength()
+
+	projCentre1 := ray1.Project(&torus.centre1)
+	projCentre2 := ray2.Project(&torus.centre2)
+
+	aVec1 := projCentre1.Sub(&torus.centre1)
+	a1 := aVec1.Length()
+	if a1 >= torus.Radius {
+		return false
+	}
+
+	aVec2 := projCentre2.Sub(&torus.centre2)
+	a2 := aVec2.Length()
+	if a2 >= torus.Radius {
+		return false
+	}
+
+	b1 := math.Sqrt(torus.Radius*torus.Radius - a1*a1)
+	b2 := math.Sqrt(torus.Radius*torus.Radius - a2*a2)
+
+	d1 := projCentre1.Sub(&ray1.Origin).cLength()
+	d2 := projCentre2.Sub(&ray2.Origin).cLength()
+
+	if !LeastPositiveIntersection((d1-b1)/speed1,
+		(d1+b1)/speed1,
+		(d2-b2)/speed2,
+		(d2+b2)/speed2, &hit.distance) {
+		return false
+	}
+
+	hit.intercept = hit.ray.Follow(hit.distance)
+
+	return true
 }
 
 func (sphere *ReflectiveSphere) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, colour Colour) {
@@ -489,14 +628,18 @@ func main() {
 }
 
 func glMain(driver gxui.Driver) {
-	Hres := 750
-	Vres := 750
+	var origin Vector
+
+	Hres := 500
+	Vres := 500
 
 	e0 := E(N, 0)
 
-	sphere := &ReflectiveSphere{}
+	// sphere := &ReflectiveSphere{}
+	// sphere.Radius = 0.90
 
-	sphere.Radius = 0.90
+	torus := NewReflectiveTorus(origin)
+	torus.Radius = 0.636
 
 	floorAxes := make([]Vector, N-1)
 	for i := 0; i < N-1; i++ {
@@ -506,7 +649,7 @@ func glMain(driver gxui.Driver) {
 	ceiling := NewHyperCheckboard(Ray{e0.Scale(-1), e0.Normalize()}, floorAxes)
 
 	scene := &Scene{}
-	scene.Bodies = []Body{floor, ceiling, sphere}
+	scene.Bodies = []Body{floor, ceiling, torus}
 
 	camera := Camera{}
 	camera.Origin[1] = -2
