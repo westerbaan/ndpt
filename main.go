@@ -438,14 +438,19 @@ func LeastPositiveIntersection(a1, a2, b1, b2 float64, x *float64) bool {
 }
 
 func (torus *ReflectiveTorus) Next(hit *Hit, rnd *rand.Rand) (lambda float64, ray Ray, colour Colour) {
+	var normal UnitVector
+
 	lambda = 1
 	intercept1 := hit.intercept.Prod(&torus.P1)
+	diff1 := intercept1.Sub(&torus.centre1)
 	intercept2 := hit.intercept.Prod(&torus.P2)
-	speed1 := Vector(hit.ray.Direction).Prod(&torus.P1).cLength()
-	speed2 := Vector(hit.ray.Direction).Prod(&torus.P2).cLength()
-	normal1 := Vector(intercept1.Sub(&torus.centre1).Normalize()).Scale(speed1)
-	normal2 := Vector(intercept2.Sub(&torus.centre2).Normalize()).Scale(speed2)
-	normal := normal1.Add(&normal2).Normalize()
+	diff2 := intercept2.Sub(&torus.centre2)
+
+	if diff1.cLength() > diff2.cLength() {
+		normal = diff1.Normalize()
+	} else {
+		normal = diff2.Normalize()
+	}
 
 	direction := hit.ray.Direction.Reflect(normal)
 	ray = Ray{hit.intercept, direction}
