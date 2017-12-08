@@ -11,9 +11,11 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/bwesterb/powercycle"
 	"github.com/google/gxui"
 	"github.com/google/gxui/drivers/gl"
 	"github.com/google/gxui/themes/dark"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
 const N = 5
@@ -310,16 +312,23 @@ func (s *Sampler) Sample(ray Ray, dx, dy Vector, rnd *rand.Rand) Colour {
 }
 
 func (s *Sampler) Shoot(camera Camera, imag *image.RGBA) {
-	type Job struct{ x int }
+	type Job struct{ pt uint64 }
 	type Result struct {
-		x   int
+		pt  uint64
 		col []Colour
 	}
 
-	inCh := make(chan Job, camera.Hres*camera.Vres)
+	nWorkers := runtime.NumCPU()
+	nPoints := camera.Hres * camera.Vres
+	nPerBatch := 500
+	nBatches := nPoints / nPerBatch
+
+	inCh := make(chan Job, nBatches)
 	outCh := make(chan Result, 10)
 
-	for i := 0; i < runtime.NumCPU(); i++ {
+	cyc, batches := powercycle.NewSplit(uint64(nPoints), uint32(nBatches))
+
+	for i := 0; i < nWorkers; i++ {
 		go func() {
 			rnd := rand.New(rand.NewSource(rand.Int63()))
 			for {
@@ -329,35 +338,50 @@ func (s *Sampler) Shoot(camera Camera, imag *image.RGBA) {
 					break
 				}
 
-				cols := make([]Colour, camera.Hres)
+				ret := []Colour{}
+				pt := job.pt
+				for {
+					x := int(pt / uint64(camera.Hres))
+					y := int(pt % uint64(camera.Hres))
 
-				for y := 0; y < camera.Hres; y++ {
-					down := camera.Down.Scale(float64(2*job.x-camera.Vres) / 2)
+					down := camera.Down.Scale(float64(2*x-camera.Vres) / 2)
 					right := camera.Right.Scale(float64(2*y-camera.Hres) / 2)
 					point := camera.Centre.Add(&down).Add(&right)
 					ray := Ray{camera.Origin, point.Normalize()}
-					cols[y] = s.Sample(ray, camera.Right, camera.Down, rnd)
+					ret = append(ret, s.Sample(ray, camera.Right, camera.Down, rnd))
+
+					pt = cyc.Apply(pt)
+					if pt == job.pt {
+						break
+					}
 				}
 
-				outCh <- Result{job.x, cols}
+				outCh <- Result{job.pt, ret}
 			}
 		}()
 	}
 
-	for i := 0; i < camera.Vres; i++ {
-		inCh <- Job{i}
+	log.Printf("%d batches", len(batches))
+	for _, batch := range batches {
+		inCh <- Job{batch}
 	}
 	close(inCh)
 
-	nPixels := 0
+	progressBar := pb.StartNew(nPoints)
+	nDone := 0
 	for {
 		res := <-outCh
-		for y := 0; y < camera.Hres; y++ {
-			imag.Set(y, res.x, res.col[y])
+		pt := res.pt
+		for _, c := range res.col {
+			x := int(pt / uint64(camera.Hres))
+			y := int(pt % uint64(camera.Hres))
+			imag.Set(y, x, c)
+			pt = cyc.Apply(pt)
 		}
-		nPixels += camera.Hres
-		log.Printf("%d pixels", nPixels)
-		if nPixels == camera.Vres*camera.Hres {
+		nDone += len(res.col)
+		progressBar.Set(nDone)
+		if nDone == camera.Vres*camera.Hres {
+			progressBar.Finish()
 			break
 		}
 	}
@@ -638,8 +662,8 @@ func main() {
 func glMain(driver gxui.Driver) {
 	var origin Vector
 
-	Hres := 500
-	Vres := 500
+	Hres := 750
+	Vres := 750
 
 	e0 := E(N, 0)
 
