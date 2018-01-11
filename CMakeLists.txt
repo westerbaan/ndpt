@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.5)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -15,4 +15,4 @@ include_directories(
     ${png++_INCLUDE_DIR})
 add_executable(ndpt ndpt.cpp)
 target_link_libraries(ndpt ${png++_LIBRARIES} ${PNG_LIBRARY})
-set_property(TARGET ndpt PROPERTY CXX_STANDARD 17)
+set_property(TARGET ndpt PROPERTY CXX_STANDARD 14)
