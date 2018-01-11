@@ -378,13 +378,13 @@ public:
 
 // A scene
 template <class S, size_t N>
-class scene final : public Body<S,N> {
+class Scene final : public Body<S,N> {
 public:
     std::vector<const Body<S,N>*> bodies;
 
-    scene<S,N>() : bodies{} { }
+    Scene<S,N>() : bodies{} { }
 
-    scene<S,N>(const std::initializer_list<const Body<S,N>*> &l) : bodies(l) { }
+    Scene<S,N>(const std::initializer_list<const Body<S,N>*> &l) : bodies(l) { }
 
     bool
     intersect(const Ray<S,N> &ray, Hit<S,N>& minDistHit) const override {
@@ -413,12 +413,12 @@ public:
 
 // A reflective sphere
 template <class S, size_t N>
-class reflectiveSphere final : public Body<S,N> {
+class ReflectiveSphere final : public Body<S,N> {
 public:
     Vec<S,N> centre;
     S radius;
 
-    reflectiveSphere(Vec<S,N> centre, S radius)
+    ReflectiveSphere(Vec<S,N> centre, S radius)
         : centre(centre), radius(radius) { }
 
     bool
@@ -452,14 +452,14 @@ public:
 
 // Hyper-checkerboard
 template <class S, size_t N>
-class hyperCheckerboard final : public Body<S,N> {
+class HyperCheckerboard final : public Body<S,N> {
     Ray<S,N> normal;
     std::array<Vec<S,N>,N> axes;
     std::array<Ray<S,N>,N> axisRays;
     std::array<S,N> axisLengths;
 
 public:
-    hyperCheckerboard(const Ray<S,N> &normal, const std::array<Vec<S,N>,N> &axes)
+    HyperCheckerboard(const Ray<S,N> &normal, const std::array<Vec<S,N>,N> &axes)
             : axes(axes), normal(normal) {
         for (size_t i = 0; i < N; i++) {
             axisRays[i] = Ray<S,N>(normal.orig, axes[i].normalize());
@@ -505,14 +505,14 @@ public:
 };
 
 template <class S, size_t N, class RND=std::mt19937>
-class sampler {
+class Sampler {
 public:
     const Body<S,N>& root;
     int maxBounces;
     int firstBatch;
     S target;
 
-    sampler(const Body<S,N>& root)
+    Sampler(const Body<S,N>& root)
         : root(root), maxBounces(20), firstBatch(10), target(.05) { }
 
     inline Colour<S> sampleOne(const Ray<S,N> &r, const Vec<S,N> &dx,
@@ -604,13 +604,13 @@ void render() {
     Vec<S,N> origin;
     Vec<S,N> e0{1};
 
-    reflectiveSphere<S,N> sphere(origin, .9);
+    ReflectiveSphere<S,N> sphere(origin, .9);
     std::array<Vec<S,N>,N> floorAxes;
     for (size_t i = 0; i < N-1; i++) floorAxes[i][i+1] = 1;
-    hyperCheckerboard<S,N> floor(Ray<S,N>(e0, (-e0).normalize()), floorAxes);
-    hyperCheckerboard<S,N> ceiling(Ray<S,N>((-e0), e0.normalize()), floorAxes);
+    HyperCheckerboard<S,N> floor(Ray<S,N>(e0, (-e0).normalize()), floorAxes);
+    HyperCheckerboard<S,N> ceiling(Ray<S,N>((-e0), e0.normalize()), floorAxes);
     // scene<S,N> scene{&sphere};
-    scene<S,N> scene{&sphere, &floor, &ceiling};
+    Scene<S,N> Scene{&sphere, &floor, &ceiling};
 
     Camera<S,N> camera(
             Vec<S,N>{0, -2, -2}, // origin
@@ -629,7 +629,7 @@ void render() {
     camera.right = camera.right.normalize() / hRes;
     camera.down = camera.down.normalize() / vRes;
 
-    sampler<S,N> sampler(scene);
+    Sampler<S,N> sampler(Scene);
     sampler.shoot(camera);
 }
 
