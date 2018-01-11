@@ -9,19 +9,19 @@
 
 #include <png++/png.hpp>
 
-template <class S>
+template <typename S>
 constexpr S eps = std::numeric_limits<S>::epsilon();
 
-template <class S, size_t N>
+template <typename S, size_t N>
 class UVec; // unit vector, see below
 
-template <class S, size_t N>
+template <typename S, size_t N>
 class Body;
 
-template <class S, size_t N>
+template <typename S, size_t N>
 class Interaction;
 
-template <class S>
+template <typename S>
 class Colour {
 public:
     S R, G, B;
@@ -86,18 +86,18 @@ public:
     }
 };
 
-template <class S>
+template <typename S>
 constexpr Colour<S> black = Colour<S>(0,0,0);
 
-template <class S>
+template <typename S>
 constexpr Colour<S> white = Colour<S>(1,1,1);
 
-template <class S>
+template <typename S>
 constexpr Colour<S> red = Colour<S>(1,0,0);
 
 
 // Represents a vector of N-elements with scalar of type S
-template <class S, size_t N>
+template <typename S, size_t N>
 class Vec {
 protected:
     // Components of the vector
@@ -111,7 +111,7 @@ public:
     Vec<S,N>(const Vec<S,N> &other) = default;
 
     // Initializer list constructor
-    template<class T>
+    template<typename T>
     Vec<S,N>(const std::initializer_list<T> &l) {
         // For some reason clang doesn't think l.size() is constexpr
         // static_assert(l.size() < N, "initializer_list too long");
@@ -207,7 +207,7 @@ public:
 };
 
 // Represents a unit-vector vector of N-elements with scalar of type S
-template <class S, size_t N>
+template <typename S, size_t N>
 class UVec {
     Vec<S,N> v;
     UVec<S,N>() { }
@@ -266,12 +266,12 @@ public:
 };
 
 // Normalize vector
-template <class S, size_t N>
+template <typename S, size_t N>
 inline const UVec<S,N>
 Vec<S,N>::normalize() const { return UVec<S,N>::normalize(*this); }
 
 // Represents a ray
-template <class S, size_t N>
+template <typename S, size_t N>
 class Ray {
 public:
     Vec<S,N> orig; // origin of the ray
@@ -315,7 +315,7 @@ public:
 };
 
 // Represents a 2-dimensional camera
-template <class S, size_t N>
+template <typename S, size_t N>
 class Camera {
 public:
     Camera(const Vec<S,N> &origin, const Vec<S,N> &centre, 
@@ -333,7 +333,7 @@ public:
 };
 
 // The result of a ray hitting a body
-template <class S, size_t N>
+template <typename S, size_t N>
 class Hit {
 public:
     Hit(const Ray<S,N> &ray) : ray(ray) { }
@@ -345,7 +345,7 @@ public:
 };
 
 // A body
-template <class S, size_t N>
+template <typename S, size_t N>
 class Body {
 public:
     // Returns whether the given ray hits the body.  If so, it fills out the
@@ -363,7 +363,7 @@ public:
 //
 // where ray represents the reflected/refracted/etc ray and colour the
 // "absorbed" part.
-template <class S, size_t N>
+template <typename S, size_t N>
 class Interaction {
 public:
     Interaction(Colour<S> colour) : lambda(0), colour(colour), ray() { }
@@ -377,7 +377,7 @@ public:
 };
 
 // A scene
-template <class S, size_t N>
+template <typename S, size_t N>
 class Scene final : public Body<S,N> {
 public:
     std::vector<const Body<S,N>*> bodies;
@@ -412,7 +412,7 @@ public:
 };
 
 // A reflective sphere
-template <class S, size_t N>
+template <typename S, size_t N>
 class ReflectiveSphere final : public Body<S,N> {
 public:
     Vec<S,N> centre;
@@ -451,7 +451,7 @@ public:
 
 
 // Hyper-checkerboard
-template <class S, size_t N>
+template <typename S, size_t N>
 class HyperCheckerboard final : public Body<S,N> {
     Ray<S,N> normal;
     std::array<Vec<S,N>,N> axes;
@@ -504,7 +504,7 @@ public:
     }
 };
 
-template <class S, size_t N, class RND=std::mt19937>
+template <typename S, size_t N, typename RND=std::mt19937>
 class Sampler {
 public:
     const Body<S,N>& root;
@@ -596,7 +596,7 @@ public:
 
 };
 
-template <class S, size_t N>
+template <typename S, size_t N>
 void render() {
     int hRes = 750;
     int vRes = 750;
