@@ -504,16 +504,31 @@ public:
     }
 };
 
-template <typename S, size_t N, typename RND=std::mt19937>
+template <typename S>
+class PNGScreen {
+public:
+    png::image<png::rgb_pixel> png;
+    PNGScreen(size_t hRes, size_t vRes) : png(hRes, vRes) { }
+
+    inline void put(size_t x, size_t y, const Colour<S>& colour) {
+        png[x][y] = colour;
+    }
+};
+
+template <typename S, size_t N, typename SCREEN, typename RND=std::mt19937>
 class Sampler {
 public:
     const Body<S,N>& root;
+    const Camera<S,N>& camera;
+    SCREEN& screen;
+
     int maxBounces;
     int firstBatch;
     S target;
 
-    Sampler(const Body<S,N>& root)
-        : root(root), maxBounces(20), firstBatch(10), target(.05) { }
+    Sampler(const Body<S,N>& root, const Camera<S,N>& camera, SCREEN& screen)
+        : root(root), camera(camera), screen(screen),
+        maxBounces(20), firstBatch(10), target(.05) { }
 
     inline Colour<S> sampleOne(const Ray<S,N> &r, const Vec<S,N> &dx,
                                const Vec<S,N> &dy, RND &rnd) const {
@@ -576,9 +591,8 @@ public:
         }
     }
 
-    void shoot (const Camera<S,N>& camera) {
+    void shoot () {
         RND rnd;
-        png::image<png::rgb_pixel> image(camera.hRes, camera.vRes);
 
         for (size_t x = 0; x < camera.vRes; x++) {
             if (x && x % 100 == 0) std::cout << " " << x << std::endl;
@@ -587,11 +601,9 @@ public:
                 Vec<S,N> right(camera.right * (2*static_cast<S>(y) - camera.hRes) / 2);
                 Ray<S,N> ray(camera.origin, (down + right + camera.centre).normalize());
                 Colour<S> c(sample(ray, camera.right, camera.down, rnd));
-                image[x][y] = c;
+                screen.put(x, y, c);
             }
         }
-
-        image.write("out.png");
     }
 
 };
@@ -610,7 +622,7 @@ void render() {
     HyperCheckerboard<S,N> floor(Ray<S,N>(e0, (-e0).normalize()), floorAxes);
     HyperCheckerboard<S,N> ceiling(Ray<S,N>((-e0), e0.normalize()), floorAxes);
     // scene<S,N> scene{&sphere};
-    Scene<S,N> Scene{&sphere, &floor, &ceiling};
+    Scene<S,N> scene{&sphere, &floor, &ceiling};
 
     Camera<S,N> camera(
             Vec<S,N>{0, -2, -2}, // origin
@@ -629,8 +641,10 @@ void render() {
     camera.right = camera.right.normalize() / hRes;
     camera.down = camera.down.normalize() / vRes;
 
-    Sampler<S,N> sampler(Scene);
-    sampler.shoot(camera);
+    PNGScreen<S> screen(camera.hRes, camera.vRes);
+    Sampler<S,N,PNGScreen<S>> sampler(scene, camera, screen);
+    sampler.shoot();
+    screen.png.write("out.png");
 }
 
 int main() {
