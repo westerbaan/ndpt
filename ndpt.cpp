@@ -2,6 +2,7 @@
 #include <cassert>
 
 #include <array>
+#include <mutex>
 #include <thread>
 #include <random>
 #include <vector>
@@ -9,6 +10,9 @@
 #include <algorithm>
 
 #include <png++/png.hpp>
+#include <boost/program_options.hpp>
+
+namespace po = boost::program_options;
 
 template <typename S>
 constexpr S eps = std::numeric_limits<S>::epsilon();
@@ -544,6 +548,8 @@ class Sampler {
     size_t nextJob;
 
 public:
+    size_t nWorkers = 0;
+
     Sampler(const Body<S,N>& root, const Camera<S,N>& camera, SCREEN& screen)
         : root(root), camera(camera), screen(screen),
         maxBounces(20), firstBatch(10), target(.05), pixelsPerJob(500) { }
@@ -555,8 +561,10 @@ public:
             std::lock_guard<std::mutex> g(lock);
 
             // Start threads
-            workers.reserve(std::thread::hardware_concurrency());
-            for (size_t i = 0; i < std::thread::hardware_concurrency(); i++)
+            if (nWorkers == 0)
+                nWorkers = std::thread::hardware_concurrency();
+            workers.reserve(nWorkers);
+            for (size_t i = 0; i < nWorkers; i++)
                 workers.emplace_back(std::make_unique<std::thread>(
                                 &Sampler::workerEntry, this));
 
@@ -673,7 +681,7 @@ private:
 };
 
 template <typename S, size_t N>
-void render() {
+void render(size_t nWorkers) {
     int hRes = 750;
     int vRes = 750;
 
@@ -707,11 +715,32 @@ void render() {
 
     PNGScreen<S> screen(camera.hRes, camera.vRes);
     Sampler<S,N,PNGScreen<S>> sampler(scene, camera, screen);
+    sampler.nWorkers = nWorkers;
     sampler.shoot();
     screen.png.write("out.png");
 }
 
-int main() {
-    render<double,5>();
+int main(int argc, char* argv[]) {
+    size_t nWorkers = 0;
+
+    // Parse commandline options
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help", "this help message")
+        ("threads", po::value<size_t>(), "number of worker threads to use");
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        std::cout << desc << "\n";
+        return 1;
+    }
+
+    if (vm.count("threads"))
+        nWorkers = vm["threads"].as<size_t>();
+
+    // Render!
+    render<double,5>(nWorkers);
     return 0;
 }
