@@ -2,6 +2,7 @@
 #include <cassert>
 
 #include <array>
+#include <thread>
 #include <random>
 #include <vector>
 #include <iostream>
@@ -517,7 +518,17 @@ public:
 
 template <typename S, size_t N, typename SCREEN, typename RND=std::mt19937>
 class Sampler {
-public:
+    struct Job {
+        const size_t start;
+        const size_t end;
+        std::vector<Colour<S>> result;
+
+        Job(size_t start, size_t pixelsPerJob)
+                : start(start), end(start + pixelsPerJob) {
+            result.reserve(pixelsPerJob);
+        }
+    };
+
     const Body<S,N>& root;
     const Camera<S,N>& camera;
     SCREEN& screen;
@@ -525,10 +536,78 @@ public:
     int maxBounces;
     int firstBatch;
     S target;
+    size_t pixelsPerJob;
 
+    std::mutex lock;
+    std::vector<std::unique_ptr<std::thread>> workers;
+    std::vector<Job> jobs;
+    size_t nextJob;
+
+public:
     Sampler(const Body<S,N>& root, const Camera<S,N>& camera, SCREEN& screen)
         : root(root), camera(camera), screen(screen),
-        maxBounces(20), firstBatch(10), target(.05) { }
+        maxBounces(20), firstBatch(10), target(.05), pixelsPerJob(500) { }
+
+    // Shoots the scene with the camera provided and writes out to the screen.
+    // Can be called only once.
+    void shoot () {
+        {
+            std::lock_guard<std::mutex> g(lock);
+
+            // Start threads
+            workers.reserve(std::thread::hardware_concurrency());
+            for (size_t i = 0; i < std::thread::hardware_concurrency(); i++)
+                workers.emplace_back(std::make_unique<std::thread>(
+                                &Sampler::workerEntry, this));
+
+            // Create jobs.  Thread will be waiting on lock until we release it.
+            size_t nPixels = camera.vRes * camera.hRes;
+            for (size_t job = 0; job <  nPixels; job += pixelsPerJob)
+                jobs.emplace_back(Job(job, pixelsPerJob));
+            nextJob = 0;
+        }
+
+        for (auto& thread : workers)
+            thread->join();
+
+        std::cout << "writing to PNG\n";
+        for (auto& job : jobs) {
+            size_t j = 0;
+            for (size_t i = job.start; i < job.end; i++, j++) {
+                size_t x = i % camera.vRes; // TODO optimize?
+                size_t y = i / camera.vRes;
+                screen.put(x, y, job.result[j]);
+            }
+        }
+    }
+
+private:
+    void workerEntry() {
+        RND rnd;
+
+        while (true) {
+            size_t ourJob;
+
+            { // get next job
+                std::lock_guard<std::mutex> g(lock);
+                if (nextJob == jobs.size())
+                    break;
+                ourJob = nextJob++;
+            }
+
+            Job& job = jobs[ourJob];
+
+            for (size_t i = job.start; i < job.end; i++) {
+                size_t x = i % camera.vRes; // TODO optimize?
+                size_t y = i / camera.vRes;
+                Vec<S,N> down(camera.down * (2*static_cast<S>(x) - camera.vRes) / 2);
+                Vec<S,N> right(camera.right * (2*static_cast<S>(y) - camera.hRes) / 2);
+                Ray<S,N> ray(camera.origin, (down + right + camera.centre).normalize());
+                Colour<S> c(sample(ray, camera.right, camera.down, rnd));
+                job.result.push_back(c);
+            }
+        }
+    }
 
     inline Colour<S> sampleOne(const Ray<S,N> &r, const Vec<S,N> &dx,
                                const Vec<S,N> &dy, RND &rnd) const {
@@ -588,21 +667,6 @@ public:
                 return oldCol;
 
             newCol = sampleBatch(ray, size, dx, dy, rnd);
-        }
-    }
-
-    void shoot () {
-        RND rnd;
-
-        for (size_t x = 0; x < camera.vRes; x++) {
-            if (x && x % 100 == 0) std::cout << " " << x << std::endl;
-            for (size_t y = 0; y < camera.hRes; y++) {
-                Vec<S,N> down(camera.down * (2*static_cast<S>(x) - camera.vRes) / 2);
-                Vec<S,N> right(camera.right * (2*static_cast<S>(y) - camera.hRes) / 2);
-                Ray<S,N> ray(camera.origin, (down + right + camera.centre).normalize());
-                Colour<S> c(sample(ray, camera.right, camera.down, rnd));
-                screen.put(x, y, c);
-            }
         }
     }
 
