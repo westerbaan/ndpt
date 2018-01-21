@@ -527,9 +527,9 @@ class Sampler {
         const size_t end;
         std::vector<Colour<S>> result;
 
-        Job(size_t start, size_t pixelsPerJob)
-                : start(start), end(start + pixelsPerJob) {
-            result.reserve(pixelsPerJob);
+        Job(size_t start, size_t end)
+                : start(start), end(end) {
+            result.reserve(end - start);
         }
     };
 
@@ -571,7 +571,7 @@ public:
             // Create jobs.  Thread will be waiting on lock until we release it.
             size_t nPixels = camera.vRes * camera.hRes;
             for (size_t job = 0; job <  nPixels; job += pixelsPerJob)
-                jobs.emplace_back(Job(job, pixelsPerJob));
+                jobs.emplace_back(Job(job, std::min(job + pixelsPerJob, nPixels)));
             nextJob = 0;
         }
 
