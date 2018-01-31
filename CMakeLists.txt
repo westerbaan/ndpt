@@ -6,7 +6,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -funroll-loops")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -funroll-loops -Wall")
 
 find_package(PNG REQUIRED)
 find_package(png++ REQUIRED)

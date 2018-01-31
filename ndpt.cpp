@@ -465,7 +465,7 @@ class HyperCheckerboard final : public Body<S,N> {
 
 public:
     HyperCheckerboard(const Ray<S,N> &normal, const std::array<Vec<S,N>,N> &axes)
-            : axes(axes), normal(normal) {
+            : normal(normal), axes(axes) {
         for (size_t i = 0; i < N; i++) {
             axisRays[i] = Ray<S,N>(normal.orig, axes[i].normalize());
             axisLengths[i] = axes[i].length();
