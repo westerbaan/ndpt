@@ -685,12 +685,14 @@ void render(size_t nWorkers) {
     int hRes = 750;
     int vRes = 750;
 
-    Vec<S,N> origin;
+    Vec<S,N> origin{0};
     Vec<S,N> e0{1};
 
     ReflectiveSphere<S,N> sphere(origin, .9);
     std::array<Vec<S,N>,N> floorAxes;
-    for (size_t i = 0; i < N-1; i++) floorAxes[i][i+1] = 1;
+    for (size_t i = 0; i < N; i++)
+        for (size_t j = 0; j < N; j++)
+            floorAxes[i][j] = (j == i + 1) ? 1 : 0;
     HyperCheckerboard<S,N> floor(Ray<S,N>(e0, (-e0).normalize()), floorAxes);
     HyperCheckerboard<S,N> ceiling(Ray<S,N>((-e0), e0.normalize()), floorAxes);
     // scene<S,N> scene{&sphere};
