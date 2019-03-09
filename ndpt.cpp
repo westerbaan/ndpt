@@ -90,6 +90,10 @@ public:
 
 template <typename S> constexpr Colour<S> black = Colour<S>(0, 0, 0);
 
+template <typename S> constexpr Colour<S> blue = Colour<S>(0, 0, 1);
+
+template <typename S> constexpr Colour<S> lightBlue = Colour<S>(.5, .5, 1.);
+
 template <typename S> constexpr Colour<S> white = Colour<S>(1, 1, 1);
 
 template <typename S> constexpr Colour<S> red = Colour<S>(1, 0, 0);
@@ -584,7 +588,7 @@ public:
 
     return Interaction<S, N>(
         0.2, Ray<S, N>(hit.intercept, hit.ray.dir.reflect(normal.dir)),
-        sum % 2 ? black<S> : white<S>);
+        sum % 2 ? lightBlue<S> : white<S>);
   }
 };
 
@@ -632,7 +636,7 @@ public:
 
   Sampler(const Body<S, N> &root, const Camera<S, N> &camera, SCREEN &screen)
       : root(root), camera(camera), screen(screen), maxBounces(20),
-        firstBatch(10), target(.05), pixelsPerJob(500) {}
+        firstBatch(10), target(.05), pixelsPerJob(5000) {}
 
   // Shoots the scene with the camera provided and writes out to the screen.
   // Can be called only once.
@@ -732,7 +736,8 @@ private:
     for (int i = 0; i < maxBounces; i++) {
       Hit<S, N> hit(cRay);
       if (!root.intersect(cRay, hit))
-        return ret;
+        return ret + factor * white<S>;
+        // return ret;
       Interaction<S, N> intr = hit.body->next(hit);
       if (intr.lambda == 0)
         return ret + intr.colour * factor;
@@ -781,7 +786,7 @@ private:
 };
 
 template <typename S, size_t N> void render(size_t nWorkers) {
-  constexpr int dpi = 600;
+  constexpr int dpi = 300;
   constexpr int hRes = static_cast<int>(6.81102 * static_cast<double>(dpi));
 
   // Ratio of front cover is 173 : 246
