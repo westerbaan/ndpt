@@ -652,7 +652,7 @@ public:
     for (auto &thread : workers)
       thread->join();
 
-    std::cout << "writing to PNG\n";
+    std::cerr << "\nWriting to PNG ...\n";
     for (auto &job : jobs) {
       size_t j = 0;
       for (size_t i = job.start; i < job.end; i++, j++) {
@@ -717,7 +717,8 @@ private:
     }
 
     // max bounces hit.
-    std::cerr << "max bounces hit" << std::endl;
+    std::cerr << "m";
+    std::cerr.flush();
     return ret;
   }
 
@@ -754,8 +755,14 @@ private:
 };
 
 template <typename S, size_t N> void render(size_t nWorkers) {
-  int hRes = 750;
-  int vRes = 750;
+  constexpr int dpi = 2400;
+  constexpr int hRes = static_cast<int>(6.81102 * static_cast<double>(dpi));
+
+  // Ratio of front cover is 173 : 246
+  constexpr int vRes = static_cast<int>(
+      (static_cast<double>(hRes) / 173.) * 246.);
+
+  std::cerr << "Rendering @" << dpi << " DPI (" << hRes << "x" << vRes << ")\n";
 
   Vec<S, N> origin{0};
   Vec<S, N> e0{1};
@@ -805,7 +812,7 @@ int main(int argc, char *argv[]) {
   po::notify(vm);
 
   if (vm.count("help")) {
-    std::cout << desc << "\n";
+    std::cerr << desc << "\n";
     return 1;
   }
 
