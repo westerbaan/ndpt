@@ -1,8 +1,10 @@
 #include <cassert>
 #include <cmath>
 
+#include <condition_variable>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <mutex>
 #include <random>
@@ -617,6 +619,8 @@ class Sampler {
   size_t pixelsPerJob;
 
   std::mutex lock;
+  std::condition_variable done;
+
   std::vector<std::unique_ptr<std::thread>> workers;
   std::vector<Job> jobs;
   size_t nextJob;
@@ -632,7 +636,7 @@ public:
   // Can be called only once.
   void shoot() {
     {
-      std::lock_guard<std::mutex> g(lock);
+      std::unique_lock<std::mutex> g(lock);
 
       // Start threads
       if (nWorkers == 0)
@@ -647,6 +651,16 @@ public:
       for (size_t job = 0; job < nPixels; job += pixelsPerJob)
         jobs.emplace_back(job, std::min(job + pixelsPerJob, nPixels));
       nextJob = 0;
+    }
+
+    {
+      std::unique_lock<std::mutex> g(lock);
+      while (true) {
+        if (done.wait_for(g, std::chrono::milliseconds(100))
+              == std::cv_status::no_timeout)
+          break;
+        std::cerr << nextJob << "/" << jobs.size() << "\n";
+      }
     }
 
     for (auto &thread : workers)
@@ -671,10 +685,12 @@ private:
       size_t ourJob;
 
       { // get next job
-        std::lock_guard<std::mutex> g(lock);
+        std::unique_lock<std::mutex> g(lock);
         if (nextJob == jobs.size())
           break;
         ourJob = nextJob++;
+        if (nextJob == jobs.size())
+          done.notify_all();
       }
 
       Job &job = jobs[ourJob];
