@@ -3,6 +3,7 @@
 
 #include <condition_variable>
 #include <algorithm>
+#include <iomanip>
 #include <array>
 #include <chrono>
 #include <iostream>
@@ -614,6 +615,7 @@ class Sampler {
   SCREEN &screen;
 
   int maxBounces;
+  mutable std::atomic<int> nMaxBouncesHit;
   int firstBatch;
   S target;
   size_t pixelsPerJob;
@@ -653,13 +655,22 @@ public:
       nextJob = 0;
     }
 
+
+    int jobsWidth = static_cast<int>(std::ceil(std::log10(jobs.size())) + 1);
+    int pointsWidth = static_cast<int>(std::ceil(std::log10(
+            camera.hRes * camera.vRes)) + 1);
     {
       std::unique_lock<std::mutex> g(lock);
       while (true) {
         if (done.wait_for(g, std::chrono::milliseconds(100))
               == std::cv_status::no_timeout)
           break;
-        std::cerr << nextJob << "/" << jobs.size() << "\n";
+        std::cerr
+          << std::setprecision(0) << std::fixed << std::setw(3)
+            << static_cast<double>(nextJob) / 
+                static_cast<double>(jobs.size()) * 100  << "% "
+          << std::setw(jobsWidth) << nextJob << "/" << jobs.size() << " "
+          << std::setw(pointsWidth) << nMaxBouncesHit << " diverged\r";
       }
     }
 
@@ -733,8 +744,7 @@ private:
     }
 
     // max bounces hit.
-    std::cerr << "m";
-    std::cerr.flush();
+    nMaxBouncesHit++;
     return ret;
   }
 
