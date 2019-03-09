@@ -395,6 +395,56 @@ public:
   Interaction<S, N> next(const Hit<S, N> &hit) const override { assert(0); }
 };
 
+// A reflective bowl
+template <typename S, size_t N>
+class ReflectiveBowl final : public Body<S, N> {
+public:
+  Vec<S, N> centre;
+  Vec<S, N> north;
+  S radius;
+
+  ReflectiveBowl(const Vec<S, N> &centre, S radius, const Vec<S, N> &north)
+      : centre(centre), north(north), radius(radius) {}
+
+  bool intersect(const Ray<S, N> &ray, Hit<S, N> &hit) const override {
+    Vec<S, N> projCentre = ray.project(centre);
+
+    if (!ray.inView(projCentre))
+      return false;
+
+    hit.body = this;
+
+    Vec<S, N> aVec = projCentre - centre;
+    S a = aVec.length();
+
+    if (a >= radius)
+      return false;
+
+    S b = std::sqrt(radius * radius - a * a);
+    hit.distance = (projCentre - ray.orig).length() - b;
+    hit.intercept = hit.ray.follow(hit.distance);
+
+    if ((hit.intercept - centre).dot(north) < 0 && hit.distance > 0.001)
+      return true;
+
+    hit.distance += 2*b;
+    hit.intercept = hit.ray.follow(hit.distance);
+
+    if ((hit.intercept - centre).dot(north) < 0 && hit.distance > 0.001)
+      return true;
+
+    return false;
+  }
+
+  Interaction<S, N> next(const Hit<S, N> &hit) const override {
+    UVec<S, N> normal = (centre - hit.intercept).normalize();
+    UVec<S, N> dir = hit.ray.dir.reflect(normal);
+    // return Interaction<S, N>(Ray<S, N>(hit.intercept, dir));
+    return Interaction<S, N>(0.8, Ray<S, N>(hit.intercept, dir),
+        lightBlue<S>);
+  }
+};
+
 // A reflective sphere
 template <typename S, size_t N>
 class ReflectiveSphere final : public Body<S, N> {
@@ -797,8 +847,17 @@ template <typename S, size_t N> void render(size_t nWorkers) {
 
   Vec<S, N> origin{0};
   Vec<S, N> e0{1};
+  Vec<S, N> e1{0, 1};
+  Vec<S, N> e2{0, 0, 1};
 
-  ReflectiveSphere<S,N> sphere(origin, .9);
+  // ReflectiveSphere<S,N> sphere(origin, .9);
+
+  // ReflectiveBowl<S,N> sphere(origin, .9, -e0);
+  // ReflectiveBowl<S,N> sphere2(origin + 1.5*e1+1.5*e2 + .3*e0, .9, e0);
+
+  ReflectiveBowl<S,N> sphere(origin - .2*(e1-e2), .9, e1-e2 - .5*e2);
+  ReflectiveBowl<S,N> sphere2(origin + .2*(e1-e2), .9, -(e1-e2) - .5*e2);
+
   //ReflectiveTorus<S, N> torus(origin, .636);
   std::array<Vec<S, N>, N> floorAxes;
   for (size_t i = 0; i < N; i++)
@@ -806,7 +865,7 @@ template <typename S, size_t N> void render(size_t nWorkers) {
       floorAxes[i][j] = (j == i + 1) ? 1 : 0;
   HyperCheckerboard<S, N> floor(Ray<S, N>(e0, (-e0).normalize()), floorAxes);
   HyperCheckerboard<S, N> ceiling(Ray<S, N>(2.5*(-e0), e0.normalize()), floorAxes);
-Scene<S,N> scene{&sphere, &floor, &ceiling};
+  Scene<S,N> scene{&sphere, &sphere2, &floor, &ceiling};
   //Scene<S, N> scene{&torus, &floor, &ceiling};
 
   Camera<S, N> camera(Vec<S, N>{-2., -2., -2.}, // origin
@@ -828,8 +887,8 @@ Scene<S,N> scene{&sphere, &floor, &ceiling};
 
   constexpr auto minRes = std::min(hRes, vRes);
 
-  camera.right = camera.right.normalize() / minRes;
-  camera.down = camera.down.normalize() / minRes;
+  camera.right = camera.right.normalize() * 0.9 / minRes;
+  camera.down = camera.down.normalize() * 0.9 / minRes;
 
   PNGScreen<S> screen(camera.hRes, camera.vRes);
   Sampler<S, N, PNGScreen<S>> sampler(scene, camera, screen);
