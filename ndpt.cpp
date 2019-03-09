@@ -639,13 +639,13 @@ public:
         nWorkers = std::thread::hardware_concurrency();
       workers.reserve(nWorkers);
       for (size_t i = 0; i < nWorkers; i++)
-        workers.emplace_back(
+        workers.push_back(
             std::make_unique<std::thread>(&Sampler::workerEntry, this));
 
       // Create jobs.  Thread will be waiting on lock until we release it.
       size_t nPixels = camera.vRes * camera.hRes;
       for (size_t job = 0; job < nPixels; job += pixelsPerJob)
-        jobs.emplace_back(Job(job, std::min(job + pixelsPerJob, nPixels)));
+        jobs.emplace_back(job, std::min(job + pixelsPerJob, nPixels));
       nextJob = 0;
     }
 
