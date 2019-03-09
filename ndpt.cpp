@@ -755,7 +755,7 @@ private:
 };
 
 template <typename S, size_t N> void render(size_t nWorkers) {
-  constexpr int dpi = 2400;
+  constexpr int dpi = 150;
   constexpr int hRes = static_cast<int>(6.81102 * static_cast<double>(dpi));
 
   // Ratio of front cover is 173 : 246
