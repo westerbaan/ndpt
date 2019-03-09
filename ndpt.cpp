@@ -94,9 +94,13 @@ template <typename S> constexpr Colour<S> blue = Colour<S>(0, 0, 1);
 
 template <typename S> constexpr Colour<S> lightBlue = Colour<S>(.5, .5, 1.);
 
+template <typename S> constexpr Colour<S> purple = Colour<S>(.5, 0, .5);
+
 template <typename S> constexpr Colour<S> white = Colour<S>(1, 1, 1);
 
 template <typename S> constexpr Colour<S> red = Colour<S>(1, 0, 0);
+
+template <typename S> constexpr Colour<S> green = Colour<S>(0, 1, 0);
 
 // Represents a vector of N-elements with scalar of type S
 template <typename S, size_t N> class Vec {
@@ -329,7 +333,7 @@ public:
 // The result of a ray hitting a body
 template <typename S, size_t N> class Hit {
 public:
-  Hit(const Ray<S, N> &ray) : ray(ray) {}
+  Hit(Ray<S, N> ray) : ray(std::move(ray)) {}
 
   Ray<S, N> ray;
   S distance;
@@ -355,10 +359,10 @@ public:
 // "absorbed" part.
 template <typename S, size_t N> class Interaction {
 public:
-  Interaction(Colour<S> colour) : lambda(0), colour(colour), ray() {}
-  Interaction(Ray<S, N> ray) : lambda(1), colour(), ray(ray) {}
+  Interaction(Colour<S> colour) : lambda(0), colour(std::move(colour)), ray() {}
+  Interaction(Ray<S, N> ray) : lambda(1), colour(), ray(std::move(ray)) {}
   Interaction(S lambda, Ray<S, N> ray, Colour<S> colour)
-      : lambda(lambda), colour(colour), ray(ray) {}
+      : lambda(lambda), colour(std::move(colour)), ray(std::move(ray)) {}
 
   S lambda;
   Colour<S> colour;
@@ -402,9 +406,13 @@ public:
   Vec<S, N> centre;
   Vec<S, N> north;
   S radius;
+  Colour<S> shade;
 
-  ReflectiveBowl(const Vec<S, N> &centre, S radius, const Vec<S, N> &north)
-      : centre(centre), north(north), radius(radius) {}
+  ReflectiveBowl(Vec<S, N> centre, S radius, Vec<S, N> north, Colour<S> shade)
+      : centre(std::move(centre)),
+        north(std::move(north)),
+        radius(radius),
+        shade(std::move(shade)) {}
 
   bool intersect(const Ray<S, N> &ray, Hit<S, N> &hit) const override {
     Vec<S, N> projCentre = ray.project(centre);
@@ -437,11 +445,16 @@ public:
   }
 
   Interaction<S, N> next(const Hit<S, N> &hit) const override {
-    UVec<S, N> normal = (centre - hit.intercept).normalize();
-    UVec<S, N> dir = hit.ray.dir.reflect(normal);
-    // return Interaction<S, N>(Ray<S, N>(hit.intercept, dir));
-    return Interaction<S, N>(0.8, Ray<S, N>(hit.intercept, dir),
-        lightBlue<S>);
+    auto&& normal = (centre - hit.intercept).normalize();
+    auto&& dir = hit.ray.dir.reflect(normal);
+    auto ray = Ray<S,N>(hit.intercept, dir);
+
+    if (ray.inView(ray.project(centre))) {
+      // Internal reflection, color it.
+      return Interaction<S, N>(0.8, std::move(ray), shade);
+    } else {
+      return Interaction<S, N>(std::move(ray));
+    }
   }
 };
 
@@ -452,8 +465,8 @@ public:
   Vec<S, N> centre;
   S radius;
 
-  ReflectiveSphere(const Vec<S, N> &centre, S radius)
-      : centre(centre), radius(radius) {}
+  ReflectiveSphere(Vec<S, N> centre, S radius)
+      : centre(std::move(centre)), radius(radius) {}
 
   bool intersect(const Ray<S, N> &ray, Hit<S, N> &hit) const override {
     Vec<S, N> projCentre = ray.project(centre);
@@ -836,7 +849,7 @@ private:
 };
 
 template <typename S, size_t N> void render(size_t nWorkers) {
-  constexpr int dpi = 300;
+  constexpr int dpi = 2400;
   constexpr int hRes = static_cast<int>(6.81102 * static_cast<double>(dpi));
 
   // Ratio of front cover is 173 : 246
@@ -855,8 +868,9 @@ template <typename S, size_t N> void render(size_t nWorkers) {
   // ReflectiveBowl<S,N> sphere(origin, .9, -e0);
   // ReflectiveBowl<S,N> sphere2(origin + 1.5*e1+1.5*e2 + .3*e0, .9, e0);
 
-  ReflectiveBowl<S,N> sphere(origin - .2*(e1-e2), .9, e1-e2 - .5*e2);
-  ReflectiveBowl<S,N> sphere2(origin + .2*(e1-e2), .9, -(e1-e2) - .5*e2);
+  auto shade = blue<S>*.5;
+  ReflectiveBowl<S,N> sphere(origin - .2*(e1-e2), .9, e1-e2 - .5*e2, shade);
+  ReflectiveBowl<S,N> sphere2(origin + .2*(e1-e2), .9, -(e1-e2) - .5*e2, shade);
 
   //ReflectiveTorus<S, N> torus(origin, .636);
   std::array<Vec<S, N>, N> floorAxes;
