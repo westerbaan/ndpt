@@ -816,3 +816,5 @@ int main(int argc, char *argv[]) {
   render<double, 5>(nWorkers);
   return 0;
 }
+
+// vim: sw=2 ts=2 et
