@@ -790,8 +790,10 @@ template <typename S, size_t N> void render(size_t nWorkers) {
     camera.down[4 + 2 * i] = std::pow(2, -static_cast<S>(i) - 1);
   }
 
-  camera.right = camera.right.normalize() / hRes;
-  camera.down = camera.down.normalize() / vRes;
+  constexpr auto minRes = std::min(hRes, vRes);
+
+  camera.right = camera.right.normalize() / minRes;
+  camera.down = camera.down.normalize() / minRes;
 
   PNGScreen<S> screen(camera.hRes, camera.vRes);
   Sampler<S, N, PNGScreen<S>> sampler(scene, camera, screen);
