@@ -1,8 +1,11 @@
 #include <cassert>
 #include <cmath>
 
+#include <condition_variable>
 #include <algorithm>
+#include <iomanip>
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <mutex>
 #include <random>
@@ -612,11 +615,14 @@ class Sampler {
   SCREEN &screen;
 
   int maxBounces;
+  mutable std::atomic<int> nMaxBouncesHit;
   int firstBatch;
   S target;
   size_t pixelsPerJob;
 
   std::mutex lock;
+  std::condition_variable done;
+
   std::vector<std::unique_ptr<std::thread>> workers;
   std::vector<Job> jobs;
   size_t nextJob;
@@ -632,21 +638,40 @@ public:
   // Can be called only once.
   void shoot() {
     {
-      std::lock_guard<std::mutex> g(lock);
+      std::unique_lock<std::mutex> g(lock);
 
       // Start threads
       if (nWorkers == 0)
         nWorkers = std::thread::hardware_concurrency();
       workers.reserve(nWorkers);
       for (size_t i = 0; i < nWorkers; i++)
-        workers.emplace_back(
+        workers.push_back(
             std::make_unique<std::thread>(&Sampler::workerEntry, this));
 
       // Create jobs.  Thread will be waiting on lock until we release it.
       size_t nPixels = camera.vRes * camera.hRes;
       for (size_t job = 0; job < nPixels; job += pixelsPerJob)
-        jobs.emplace_back(Job(job, std::min(job + pixelsPerJob, nPixels)));
+        jobs.emplace_back(job, std::min(job + pixelsPerJob, nPixels));
       nextJob = 0;
+    }
+
+
+    int jobsWidth = static_cast<int>(std::ceil(std::log10(jobs.size())) + 1);
+    int pointsWidth = static_cast<int>(std::ceil(std::log10(
+            camera.hRes * camera.vRes)) + 1);
+    {
+      std::unique_lock<std::mutex> g(lock);
+      while (true) {
+        if (done.wait_for(g, std::chrono::milliseconds(100))
+              == std::cv_status::no_timeout)
+          break;
+        std::cerr
+          << std::setprecision(0) << std::fixed << std::setw(3)
+            << static_cast<double>(nextJob) / 
+                static_cast<double>(jobs.size()) * 100  << "% "
+          << std::setw(jobsWidth) << nextJob << "/" << jobs.size() << " "
+          << std::setw(pointsWidth) << nMaxBouncesHit << " diverged\r";
+      }
     }
 
     for (auto &thread : workers)
@@ -671,10 +696,12 @@ private:
       size_t ourJob;
 
       { // get next job
-        std::lock_guard<std::mutex> g(lock);
+        std::unique_lock<std::mutex> g(lock);
         if (nextJob == jobs.size())
           break;
         ourJob = nextJob++;
+        if (nextJob == jobs.size())
+          done.notify_all();
       }
 
       Job &job = jobs[ourJob];
@@ -717,8 +744,7 @@ private:
     }
 
     // max bounces hit.
-    std::cerr << "m";
-    std::cerr.flush();
+    nMaxBouncesHit++;
     return ret;
   }
 
