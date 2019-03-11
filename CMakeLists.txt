@@ -15,10 +15,14 @@ find_package(Threads REQUIRED)  # wtf gcc
 include_directories(
     ${PNG_INCLUDE_DIR},
     ${png++_INCLUDE_DIR})
-add_executable(ndpt ndpt.cpp)
-target_link_libraries(ndpt
-    ${png++_LIBRARIES}
-    ${PNG_LIBRARY}
-    ${Boost_LIBRARIES}
-    ${CMAKE_THREAD_LIBS_INIT})
-set_property(TARGET ndpt PROPERTY CXX_STANDARD 14)
+
+set(targets "bas;bram")
+foreach(trg ${targets})
+  add_executable(${trg} ${trg}.cpp)
+  target_link_libraries(${trg}
+      ${png++_LIBRARIES}
+      ${PNG_LIBRARY}
+      ${Boost_LIBRARIES}
+      ${CMAKE_THREAD_LIBS_INIT})
+  set_property(TARGET ${trg} PROPERTY CXX_STANDARD 14)
+endforeach()
