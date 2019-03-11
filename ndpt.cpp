@@ -458,6 +458,62 @@ public:
   }
 };
 
+// A refracting sphere
+template <typename S, size_t N>
+class RefractingSphere final : public Body<S, N> {
+public:
+  Vec<S, N> centre;
+  S radius;
+
+  RefractingSphere(Vec<S, N> centre, S radius)
+      : centre(std::move(centre)), radius(radius) {}
+
+  bool intersect(const Ray<S, N> &ray, Hit<S, N> &hit) const override {
+    Vec<S, N> projCentre = ray.project(centre);
+
+    if (!ray.inView(projCentre))
+      return false;
+
+    hit.body = this;
+
+    Vec<S, N> aVec = projCentre - centre;
+    S a = aVec.length();
+
+    if (a > radius)
+      return false;
+
+    S b = std::sqrt(radius * radius - a * a);
+    hit.distance = (projCentre - ray.orig).length() - b;
+    hit.intercept = hit.ray.follow(hit.distance);
+
+    if (hit.distance > 0.001)
+      return true;
+
+    hit.distance += 2*b;
+    hit.intercept = hit.ray.follow(hit.distance);
+
+    if (hit.distance > 0.001)
+      return true;
+
+    return false;
+  }
+
+  Interaction<S, N> next(const Hit<S, N> &hit) const override {
+    UVec<S, N> normal = (centre - hit.intercept).normalize();
+    S mu = 1.33;
+    if (normal.dot(hit.ray.dir) > 0) {
+      mu = 1. / mu;
+    } else {
+      normal = (-normal).normalize();
+    }
+    auto ni = normal.dot(hit.ray.dir);
+    auto dir = ((hit.ray.dir - normal * ni) * mu
+		+ normal * std::sqrt(1. - (1. - ni*ni) *mu*mu)).normalize();
+    //return Interaction<S, N>(Ray<S, N>(hit.intercept, dir));
+    return Interaction<S,N>(Ray<S,N>(hit.intercept, dir));
+  }
+};
+
 // A reflective sphere
 template <typename S, size_t N>
 class ReflectiveSphere final : public Body<S, N> {
