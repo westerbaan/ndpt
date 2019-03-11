@@ -16,7 +16,7 @@ include_directories(
     ${PNG_INCLUDE_DIR},
     ${png++_INCLUDE_DIR})
 
-set(targets "bas;bram")
+set(targets "bas;bram;refracting")
 foreach(trg ${targets})
   add_executable(${trg} ${trg}.cpp)
   target_link_libraries(${trg}
