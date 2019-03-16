@@ -6,11 +6,16 @@ namespace po = boost::program_options;
 
 template <typename S, size_t N> void render(size_t nWorkers) {
   constexpr int dpi = 300;
-  constexpr int hRes = static_cast<int>(6.81102 * static_cast<double>(dpi));
+  constexpr int hResPage = static_cast<int>(6.81102 * static_cast<double>(dpi));
+
 
   // Ratio of front cover is 173 : 246
   constexpr int vRes = static_cast<int>(
-      (static_cast<double>(hRes) / 173.) * 246.);
+      (static_cast<double>(hResPage) / 173.) * 246.);
+
+  constexpr int tmp = hResPage + static_cast<int>(0.47244 * static_cast<double>(dpi));
+  constexpr int hRes = hResPage + tmp;
+  constexpr int hOffset = -tmp/2;
 
   std::cerr << "Rendering @" << dpi << " DPI (" << hRes << "x" << vRes << ")\n";
 
@@ -37,6 +42,7 @@ template <typename S, size_t N> void render(size_t nWorkers) {
                       Vec<S, N>{0, 1, -1},  // right
                       hRes, vRes);
   camera.centre = camera.origin * -.4;
+  camera.hOffset = hOffset;
 
   for (size_t i = 0; i < (N - 3) / 2; i++) {
     camera.right[3 + 2 * i] = std::pow(2, -static_cast<S>(i) - 1);
@@ -48,10 +54,8 @@ template <typename S, size_t N> void render(size_t nWorkers) {
   assert( std::abs(camera.down.dot(camera.origin-camera.centre)) < eps<S> );
 
 
-  constexpr auto minRes = std::min(hRes, vRes);
-
-  camera.right = camera.right.normalize() * 0.9 / minRes;
-  camera.down = camera.down.normalize() * 0.9 / minRes;
+  camera.right = camera.right.normalize() * 0.9 / hResPage;
+  camera.down = camera.down.normalize() * 0.9 / hResPage;
 
   PNGScreen<S> screen(camera.hRes, camera.vRes);
   Sampler<S, N, PNGScreen<S>> sampler(scene, camera, screen);

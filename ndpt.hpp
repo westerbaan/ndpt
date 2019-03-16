@@ -328,6 +328,7 @@ public:
   Vec<S, N> right;
   unsigned int hRes;
   unsigned int vRes;
+  int hOffset;
 };
 
 // The result of a ray hitting a body
@@ -728,9 +729,10 @@ private:
       for (size_t i = job.start; i < job.end; i++) {
         size_t x = i % camera.vRes; // TODO optimize?
         size_t y = i / camera.vRes;
-        Vec<S, N> down(camera.down * (2 * static_cast<S>(x) - camera.vRes) / 2);
-        Vec<S, N> right(camera.right * (2 * static_cast<S>(y) - camera.hRes) /
-                        2);
+        Vec<S, N> down(camera.down
+                * (2 * static_cast<S>(x) - camera.vRes) / 2);
+        Vec<S, N> right(camera.right
+                * (2 * static_cast<S>(y - camera.hOffset) - camera.hRes) / 2);
         Ray<S, N> ray(camera.origin,
                       (down + right + camera.centre).normalize());
         Colour<S> c(sample(ray, camera.right, camera.down, rnd));
