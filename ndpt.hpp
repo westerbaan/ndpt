@@ -61,7 +61,16 @@ public:
     this->B *= s;
     return *this;
   }
+  inline const Colour<S> operator*=(const Colour<S> &c) {
+    this->R *= c.R;
+    this->G *= c.G;
+    this->B *= c.B;
+    return *this;
+  }
   inline const Colour<S> operator*(const S &rhs) const {
+    return Colour<S>(*this) *= rhs;
+  }
+  inline const Colour<S> operator*(const Colour<S> &rhs) const {
     return Colour<S>(*this) *= rhs;
   }
   inline friend const Colour<S> operator*(const S &lhs, const Colour<S> &rhs) {
@@ -636,8 +645,8 @@ class Sampler {
 
   int maxBounces;
   mutable std::atomic<int> nMaxBouncesHit;
-  int firstBatch;
   S target;
+  S target2;
   size_t pixelsPerJob;
 
   std::mutex lock;
@@ -652,7 +661,8 @@ public:
 
   Sampler(const Body<S, N> &root, const Camera<S, N> &camera, SCREEN &screen)
       : root(root), camera(camera), screen(screen), maxBounces(20),
-        firstBatch(10), target(.05), pixelsPerJob(5000) {}
+        target(.002), target2(target*target), 
+        pixelsPerJob(5000) {}
 
   // Shoots the scene with the camera provided and writes out to the screen.
   // Can be called only once.
@@ -770,34 +780,30 @@ private:
     return ret;
   }
 
-  inline Colour<S> sampleBatch(const Ray<S, N> &ray, unsigned int size,
-                               const Vec<S, N> &dx, const Vec<S, N> &dy,
-                               RND &rnd) const {
-    Colour<S> ret = black<S>;
-    for (unsigned int i = 0; i < size; i++)
-      ret += sampleOne(ray, dx, dy, rnd);
-    return ret / static_cast<S>(size);
-  }
-
   inline Colour<S> sample(const Ray<S, N> &ray, const Vec<S, N> &dx,
                           const Vec<S, N> &dy, RND &rnd) const {
-    Colour<S> oldCol;
-    Colour<S> newCol;
 
-    unsigned int size = this->firstBatch;
+    Colour<S> estMean = sampleOne(ray, dx, dy, rnd);
+    Colour<S> estMoment;
+    unsigned int oldK = 0;
+    unsigned int k = 1; // sample count 
 
-    oldCol = sampleBatch(ray, size, dx, dy, rnd);
-    newCol = sampleBatch(ray, size, dx, dy, rnd);
+    Colour<S> sample;
+    Colour<S> distOldMean;
+    Colour<S> distNewMean;
 
     for (;;) {
-      bool done = (oldCol - newCol).supNorm() < this->target;
-      oldCol = (oldCol + newCol) / 2;
-      size = 2 * size;
+      oldK = k++;
 
-      if (done)
-        return oldCol;
+      sample = sampleOne(ray, dx, dy, rnd);
+      distOldMean = sample - estMean;
+      estMean += distOldMean / k;
 
-      newCol = sampleBatch(ray, size, dx, dy, rnd);
+      distNewMean = sample - estMean;
+      estMoment += distOldMean * distNewMean;
+
+      if (estMoment.supNorm() <= oldK * k * this->target2)
+          return estMean;
     }
   }
 };
