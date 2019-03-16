@@ -568,12 +568,14 @@ class HyperCheckerboard final : public Body<S, N> {
   Ray<S, N> normal;
   std::array<Vec<S, N>, N> axes;
   std::array<Ray<S, N>, N> axisRays;
+  S boundary;
   std::array<S, N> axisLengths;
 
 public:
   HyperCheckerboard(const Ray<S, N> &normal,
-                    const std::array<Vec<S, N>, N> &axes)
-      : normal(normal), axes(axes) {
+                    const std::array<Vec<S, N>, N> &axes,
+                    S boundary=17)
+      : normal(normal), axes(axes), boundary(boundary) {
     for (size_t i = 0; i < N; i++) {
       axisRays[i] = Ray<S, N>(normal.orig, axes[i].normalize());
       axisLengths[i] = axes[i].length();
@@ -596,8 +598,9 @@ public:
 
     hit.intercept = ray.follow(hit.distance);
 
-    if (hit.intercept.length() > 15)
-      return false;
+    if (this->boundary > 0)
+      if (hit.intercept.length() > this->boundary)
+        return false;
 
     return true;
   }
@@ -649,6 +652,7 @@ class Sampler {
   mutable std::atomic<int> nRaysCast;
   S target;
   S target2;
+  unsigned minimalRayCount;
   size_t pixelsPerJob;
 
   std::mutex lock;
@@ -661,9 +665,11 @@ class Sampler {
 public:
   size_t nWorkers = 0;
 
-  Sampler(const Body<S, N> &root, const Camera<S, N> &camera, SCREEN &screen)
+  Sampler(const Body<S, N> &root, const Camera<S, N> &camera, SCREEN &screen,
+          S target=0.005, unsigned minimalRayCount=10)
       : root(root), camera(camera), screen(screen), maxBounces(20),
-        target(.005), target2(target*target), 
+        target(target), target2(target*target),  
+        minimalRayCount(minimalRayCount),
         pixelsPerJob(5000) {}
 
   // Shoots the scene with the camera provided and writes out to the screen.
@@ -813,7 +819,8 @@ private:
       distNewMean = sample - estMean;
       estMoment += distOldMean * distNewMean;
 
-      if (k > 25 && estMoment.supNorm() <= oldK * k * this->target2) {
+      if (k > this->minimalRayCount 
+              && estMoment.supNorm() <= oldK * k * this->target2) {
         nPixelsDone++;
         nRaysCast += k;
         return estMean;

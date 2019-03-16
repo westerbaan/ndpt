@@ -59,7 +59,10 @@ template <typename S, size_t N> void render(size_t nWorkers) {
   camera.down = camera.down.normalize() * 0.9 / hResPage;
 
   PNGScreen<S> screen(camera.hRes, camera.vRes);
-  Sampler<S, N, PNGScreen<S>> sampler(scene, camera, screen);
+  Sampler<S, N, PNGScreen<S>> sampler(scene, camera, screen, 
+      0.002, // target
+      50 // minimal ray count
+      );
   sampler.nWorkers = nWorkers;
   sampler.shoot();
   screen.png.write("bram.png");
