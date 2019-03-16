@@ -13,7 +13,8 @@ template <typename S, size_t N> void render(size_t nWorkers) {
   constexpr int vRes = static_cast<int>(
       (static_cast<double>(hResPage) / 173.) * 246.);
 
-  constexpr int tmp = hResPage + static_cast<int>(0.47244 * static_cast<double>(dpi));
+  constexpr int tmp = hResPage + static_cast<int>(0.551181 // 14 mm in inches
+        * static_cast<double>(dpi));
   constexpr int hRes = hResPage + tmp;
   constexpr int hOffset = -tmp/2;
 
