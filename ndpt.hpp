@@ -645,6 +645,8 @@ class Sampler {
 
   int maxBounces;
   mutable std::atomic<int> nMaxBouncesHit;
+  mutable std::atomic<int> nPixelsDone;
+  mutable std::atomic<int> nRaysCast;
   S target;
   S target2;
   size_t pixelsPerJob;
@@ -661,7 +663,7 @@ public:
 
   Sampler(const Body<S, N> &root, const Camera<S, N> &camera, SCREEN &screen)
       : root(root), camera(camera), screen(screen), maxBounces(20),
-        target(.002), target2(target*target), 
+        target(.005), target2(target*target), 
         pixelsPerJob(5000) {}
 
   // Shoots the scene with the camera provided and writes out to the screen.
@@ -700,7 +702,13 @@ public:
             << static_cast<double>(nextJob) / 
                 static_cast<double>(jobs.size()) * 100  << "% "
           << std::setw(jobsWidth) << nextJob << "/" << jobs.size() << " "
-          << std::setw(pointsWidth) << nMaxBouncesHit << " diverged\r";
+          << std::setw(pointsWidth) << nMaxBouncesHit << " diverged"
+          << std::setprecision(2) << std::fixed << std::setw(7);
+        int nPixelsDoneCopy = nPixelsDone;
+        if (nPixelsDoneCopy > 0)
+          std::cerr << static_cast<double>(nRaysCast) /
+                static_cast<double>(nPixelsDoneCopy) << " rays/px";
+        std::cerr << "\r";
       }
     }
 
@@ -802,8 +810,11 @@ private:
       distNewMean = sample - estMean;
       estMoment += distOldMean * distNewMean;
 
-      if (estMoment.supNorm() <= oldK * k * this->target2)
-          return estMean;
+      if (k > 25 && estMoment.supNorm() <= oldK * k * this->target2) {
+        nPixelsDone++;
+        nRaysCast += k;
+        return estMean;
+      }
     }
   }
 };
