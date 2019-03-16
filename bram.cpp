@@ -5,7 +5,7 @@
 namespace po = boost::program_options;
 
 template <typename S, size_t N> void render(size_t nWorkers) {
-  constexpr int dpi = 300;
+  constexpr int dpi = 600;
   constexpr int hResPage = static_cast<int>(6.81102 * static_cast<double>(dpi));
 
 

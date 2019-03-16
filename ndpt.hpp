@@ -705,8 +705,11 @@ public:
           << std::setw(pointsWidth) << nMaxBouncesHit << " diverged"
           << std::setprecision(2) << std::fixed << std::setw(7);
         int nPixelsDoneCopy = nPixelsDone;
+        int nRaysCastCopy = nRaysCast;
+        nPixelsDone = 0;
+        nRaysCast = 0;
         if (nPixelsDoneCopy > 0)
-          std::cerr << static_cast<double>(nRaysCast) /
+          std::cerr << static_cast<double>(nRaysCastCopy) /
                 static_cast<double>(nPixelsDoneCopy) << " rays/px";
         std::cerr << "\r";
       }
