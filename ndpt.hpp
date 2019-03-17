@@ -5,6 +5,7 @@
 
 #include <condition_variable>
 #include <algorithm>
+#include <atomic>
 #include <iomanip>
 #include <array>
 #include <chrono>
@@ -673,7 +674,7 @@ public:
       : root(root), camera(camera), screen(screen), maxBounces(20),
         target(target), target2(target*target),  
         minimalRayCount(minimalRayCount),
-        pixelsPerJob(5000) {}
+        pixelsPerJob(500) {}
 
   // Shoots the scene with the camera provided and writes out to the screen.
   // Can be called only once.
@@ -703,7 +704,7 @@ public:
     {
       std::unique_lock<std::mutex> g(lock);
       while (!done) {
-        if (doneCV.wait_for(g, std::chrono::milliseconds(100))
+        if (doneCV.wait_for(g, std::chrono::milliseconds(500))
               == std::cv_status::no_timeout)
           break;
         std::cerr
@@ -720,7 +721,9 @@ public:
         if (nPixelsDoneCopy > 0)
           std::cerr << static_cast<double>(nRaysCastCopy) /
                 static_cast<double>(nPixelsDoneCopy) << " rays/px";
-        std::cerr << "\r";
+        std::cerr
+          << std::setw(6) << std::setprecision(1) << std::fixed
+          << static_cast<double>(nPixelsDoneCopy) / 500. << "kpx/s\r";
       }
     }
 
@@ -761,6 +764,8 @@ private:
 
       Job &job = jobs[ourJob];
 
+      int nTotalRaysCast = 0;
+      int nRaysCastInJob = 0;
       for (size_t i = job.start; i < job.end; i++) {
         size_t x = i % camera.vRes; // TODO optimize?
         size_t y = i / camera.vRes;
@@ -770,9 +775,12 @@ private:
                 * (2 * static_cast<S>(y - camera.hOffset) - camera.hRes) / 2);
         Ray<S, N> ray(camera.origin,
                       (down + right + camera.centre).normalize());
-        Colour<S> c(sample(ray, camera.right, camera.down, rnd));
+        Colour<S> c(sample(ray, camera.right, camera.down, rnd, nRaysCastInJob));
         job.result.push_back(c);
+        nTotalRaysCast += nRaysCastInJob;
       }
+      nRaysCast += nTotalRaysCast;
+      nPixelsDone += job.end - job.start;
     }
   }
 
@@ -806,7 +814,8 @@ private:
   }
 
   inline Colour<S> sample(const Ray<S, N> &ray, const Vec<S, N> &dx,
-                          const Vec<S, N> &dy, RND &rnd) const {
+                          const Vec<S, N> &dy, RND &rnd,
+                          int& nRaysCastOut) const {
 
     Colour<S> estMean = sampleOne(ray, dx, dy, rnd);
     Colour<S> estMoment;
@@ -829,8 +838,7 @@ private:
 
       if (k > this->minimalRayCount 
               && estMoment.supNorm() <= oldK * k * this->target2) {
-        nPixelsDone++;
-        nRaysCast += k;
+        nRaysCastOut = k;
         return estMean;
       }
     }
