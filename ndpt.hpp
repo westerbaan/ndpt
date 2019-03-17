@@ -655,8 +655,11 @@ class Sampler {
   unsigned minimalRayCount;
   size_t pixelsPerJob;
 
+  // done is set to true if the last job has been handed out (but this one
+  // and the previous few might not have completed yet).
+  bool done = false;
+  std::condition_variable doneCV;
   std::mutex lock;
-  std::condition_variable done;
 
   std::vector<std::unique_ptr<std::thread>> workers;
   std::vector<Job> jobs;
@@ -699,8 +702,8 @@ public:
             camera.hRes * camera.vRes)) + 1);
     {
       std::unique_lock<std::mutex> g(lock);
-      while (true) {
-        if (done.wait_for(g, std::chrono::milliseconds(100))
+      while (!done) {
+        if (doneCV.wait_for(g, std::chrono::milliseconds(100))
               == std::cv_status::no_timeout)
           break;
         std::cerr
@@ -709,7 +712,7 @@ public:
                 static_cast<double>(jobs.size()) * 100  << "% "
           << std::setw(jobsWidth) << nextJob << "/" << jobs.size() << " "
           << std::setw(pointsWidth) << nMaxBouncesHit << " diverged"
-          << std::setprecision(2) << std::fixed << std::setw(7);
+          << std::setprecision(1) << std::fixed << std::setw(8);
         int nPixelsDoneCopy = nPixelsDone;
         int nRaysCastCopy = nRaysCast;
         nPixelsDone = 0;
@@ -722,7 +725,7 @@ public:
     }
 
     for (auto &thread : workers)
-      thread->join();
+      thread->join(); // wait for the last jobs to be finished
 
     std::cerr << "\nWriting to PNG ...\n";
     for (auto &job : jobs) {
@@ -741,15 +744,20 @@ private:
 
     while (true) {
       size_t ourJob;
+      bool wakeMainThread = false;
 
       { // get next job
         std::unique_lock<std::mutex> g(lock);
-        if (nextJob == jobs.size())
+        if (done)
           break;
         ourJob = nextJob++;
-        if (nextJob == jobs.size())
-          done.notify_all();
+        if (nextJob == jobs.size()) {
+          wakeMainThread = true;
+          done = true;
+        }
       }
+      if (wakeMainThread)
+        doneCV.notify_all();
 
       Job &job = jobs[ourJob];
 
@@ -828,3 +836,5 @@ private:
     }
   }
 };
+
+// vim: ts=2 sw=2
