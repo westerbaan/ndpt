@@ -5,16 +5,15 @@
 namespace po = boost::program_options;
 
 template <typename S, size_t N> void render(size_t nWorkers) {
-  constexpr int dpi = 150;
+  constexpr int dpi = 600;
   constexpr int hResPage = static_cast<int>(6.81102 * static_cast<double>(dpi));
-
 
   // Ratio of front cover is 173 : 246
   constexpr int vRes = static_cast<int>(
       (static_cast<double>(hResPage) / 173.) * 246.);
 
-  constexpr int tmp = hResPage + static_cast<int>(0.551181 // 14 mm in inches
-        * static_cast<double>(dpi));
+  constexpr int tmp = hResPage + static_cast<int>(0.551181 // 14mm in inches
+      * static_cast<double>(dpi));
   constexpr int hRes = hResPage + tmp;
   constexpr int hOffset = -tmp/2;
 
@@ -25,18 +24,18 @@ template <typename S, size_t N> void render(size_t nWorkers) {
   Vec<S, N> e1{0, 1};
   Vec<S, N> e2{0, 0, 1};
 
-
   std::array<Vec<S, N>, N> floorAxes;
   for (size_t i = 0; i < N; i++)
     for (size_t j = 0; j < N; j++)
       floorAxes[i][j] = (j == i + 1) ? 1 : 0;
-  HyperCheckerboard<S, N> floor(Ray<S, N>(e0, (-e0).normalize()), floorAxes, 0);
-  HyperCheckerboard<S, N> ceiling(Ray<S, N>(2.5*(-e0), e0.normalize()), floorAxes,0);
+  HyperCheckerboard<S, N> floor(Ray<S, N>(e0, (-e0).normalize()), floorAxes);
+  HyperCheckerboard<S, N> ceiling(Ray<S, N>(2.5*(-e0), e0.normalize()), floorAxes);
   Scene<S,N> scene{&floor, &ceiling};
+  //Scene<S, N> scene{&torus, &floor, &ceiling};
 
-  Camera<S, N> camera(Vec<S, N>{.0, -2., -2.}, // origin
+  Camera<S, N> camera(Vec<S, N>{-2., -2., -2.}, // origin
                       Vec<S, N>{},          // centre
-                      Vec<S, N>{-1.,.0,.0},        // down
+                      Vec<S, N>{-1.,.5,0.5},        // down
                       Vec<S, N>{0, 1, -1},  // right
                       hRes, vRes);
   camera.centre = camera.origin * -.4;
@@ -56,10 +55,10 @@ template <typename S, size_t N> void render(size_t nWorkers) {
   camera.down = camera.down.normalize() * 0.9 / hResPage;
 
   PNGScreen<S> screen(camera.hRes, camera.vRes);
-  Sampler<S, N, PNGScreen<S>> sampler(scene, camera, screen, 
-      0.002, // target
-      50 // minimal ray count
-    );
+  Sampler<S, N, PNGScreen<S>> sampler(scene, camera, screen,
+    0.002, // target
+    50 // minimal ray count
+  );
   sampler.nWorkers = nWorkers;
   sampler.shoot();
   screen.png.write("sleeve.png");
